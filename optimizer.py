@@ -211,15 +211,23 @@ def build_and_solve_model(employees, unavailable_requests, manual_assignments,
         if e in worked_last_sat_night:
             objective_terms.append(shift_vars[(e, 0, 1)] * w['REST_GAP'])
 
-        # Target Shifts
-        total_worked = sum(emp_shifts)
-        delta = model.NewIntVar(0, 21, f'delta_target_{e}')
-        model.Add(total_worked - employees[e]['target_shifts'] <= delta)
-        model.Add(employees[e]['target_shifts'] - total_worked <= delta)
-        objective_terms.append(delta * w['TARGET_SHIFTS'])
+            # Target Shifts - Switch to quadratic method for better balance
+            total_worked = sum(emp_shifts)
+            delta = model.NewIntVar(0, 21, f'delta_target_{e}')
 
-        # Hard limit max shifts
-        model.Add(total_worked <= employees[e]['max_shifts'])
+            # Calculate the absolute difference between target and actual
+            model.Add(total_worked - employees[e]['target_shifts'] <= delta)
+            model.Add(employees[e]['target_shifts'] - total_worked <= delta)
+
+            # Create a variable for the squared difference (delta^2)
+            delta_sq = model.NewIntVar(0, 400, f'delta_sq_{e}')
+            model.AddMultiplicationEquality(delta_sq, [delta, delta])
+
+            # Add the squared term to the objective function
+            objective_terms.append(delta_sq * w['TARGET_SHIFTS'])
+
+            # Hard limit max shifts (remains unchanged)
+            model.Add(total_worked <= employees[e]['max_shifts'])
 
     # -------------------------------------------------------------------------
     # 5. Solve
