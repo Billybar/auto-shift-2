@@ -19,6 +19,10 @@ def create_excel_schedule(solver, shift_vars, employees, num_days, num_shifts, c
     thin_border = Border(left=Side(style='thin'), right=Side(style='thin'),
                          top=Side(style='thin'), bottom=Side(style='thin'))
 
+    # Conditional formatting colors
+    alert_red_fill = PatternFill(start_color="FFC7CE", end_color="FFC7CE", fill_type="solid")  # Light Red
+    alert_orange_fill = PatternFill(start_color="FCE4D6", end_color="FCE4D6", fill_type="solid")  # Light Orange
+
     days_names = ["ראשון", "שני", "שלישי", "רביעי", "חמישי", "שישי", "שבת"]
 
     # --- Main Headers ---
@@ -189,7 +193,6 @@ def create_excel_schedule(solver, shift_vars, employees, num_days, num_shifts, c
                         used_assignments.add((d, cand_idx))
 
                         # --- STATS TRACKING ---
-                        # Count that this employee filled a specific role slot
                         role_fill_counts[assigned_emp][role_needed] += 1
                         break
 
@@ -210,13 +213,14 @@ def create_excel_schedule(solver, shift_vars, employees, num_days, num_shifts, c
     # --- Statistics Styles ---
     stats_header_fill = PatternFill(start_color="70AD47", end_color="70AD47", fill_type="solid")  # Green
 
-    # --- Table 1: Shift Type Summary (Morning/Noon/Night) ---
+    # --- Table 1: Shift Type Summary ---
     row_cursor = 2
     ws_stats.cell(row=row_cursor, column=1).value = "סיכום משמרות לעובד"
     ws_stats.cell(row=row_cursor, column=1).font = Font(bold=True, size=14)
     row_cursor += 1
 
-    headers = ["שם העובד", "בוקר", "צהריים", "לילה", "תגבור", 'סה"כ']
+    # Added 'Target' column to headers
+    headers = ["שם העובד", "בוקר", "צהריים", "לילה", "תגבור", 'סה"כ', 'יעד']
     for col_idx, h in enumerate(headers, 1):
         c = ws_stats.cell(row=row_cursor, column=col_idx)
         c.value = h
@@ -229,14 +233,32 @@ def create_excel_schedule(solver, shift_vars, employees, num_days, num_shifts, c
     for e_idx, emp in enumerate(employees):
         counts = shift_counts[e_idx]
         total = counts[0] + counts[1] + counts[2] + counts[3]
+        target = emp.get('target_shifts', 0)
+        night_shifts = counts[2]  # 2 is Night
 
-        row_data = [emp['name'], counts[0], counts[1], counts[2], counts[3], total]
+        row_data = [emp['name'], counts[0], counts[1], counts[2], counts[3], total, target]
+
+        # Determine Row Color
+        row_fill = None
+
+        # Condition 1: Target > Actual (Light Red)
+        if target > total:
+            row_fill = alert_red_fill
+
+        # Condition 2: More than 2 night shifts (Light Orange) - Overwrites Red if both apply
+        if night_shifts > 2:
+            row_fill = alert_orange_fill
 
         for col_idx, val in enumerate(row_data, 1):
             c = ws_stats.cell(row=row_cursor, column=col_idx)
             c.value = val
             c.border = thin_border
             c.alignment = center_align
+
+            # Apply conditional fill if set
+            if row_fill:
+                c.fill = row_fill
+
         row_cursor += 1
 
     row_cursor += 2  # Spacer
@@ -255,7 +277,6 @@ def create_excel_schedule(solver, shift_vars, employees, num_days, num_shifts, c
         c.border = thin_border
     row_cursor += 1
 
-    # Iterate only over employees defined as Supervisors
     for e_idx, emp in enumerate(employees):
         if emp.get('role') == 'supervisor':
             shifts_as_sup = role_fill_counts[e_idx]['supervisor']
@@ -287,7 +308,6 @@ def create_excel_schedule(solver, shift_vars, employees, num_days, num_shifts, c
         c.border = thin_border
     row_cursor += 1
 
-    # Iterate over controllers (or supervisors who did controller work if needed)
     for e_idx, emp in enumerate(employees):
         if emp.get('role') in ['controller', 'supervisor']:
             if emp.get('role') == 'controller':

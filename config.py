@@ -19,7 +19,7 @@ NUM_SHIFTS = 4
 
 # Optimization Weights
 WEIGHTS = {
-    'TARGET_SHIFTS': 6,
+    'TARGET_SHIFTS': 20,
     'REST_GAP': 2,
     'MAX_NIGHTS': 5,
     'MAX_MORNINGS': 4,
@@ -77,7 +77,7 @@ EMPLOYEES = [
     {'name': 'אדגו פנטייה', 'target_shifts': 5, 'max_shifts': 6, 'role': 'guard', 'history_streak': 0, 'max_mornings': 0, 'min_mornings': 0, 'max_evenings': 0, 'min_evenings': 0, 'max_nights': 0, 'min_nights': 0},
     {'name': 'אופיר מנחם', 'target_shifts': 3, 'max_shifts': 3, 'role': 'guard', 'history_streak': 0, 'max_mornings': 0, 'min_mornings': 0, 'max_evenings': 0, 'min_evenings': 0, 'max_nights': 0, 'min_nights': 0},
     {'name': 'אוריאל כהן', 'target_shifts': 3, 'max_shifts': 4, 'role': 'guard', 'history_streak': 0, 'max_mornings': 0, 'min_mornings': 0, 'max_evenings': 0, 'min_evenings': 0, 'max_nights': 0, 'min_nights': 0},
-    {'name': 'אלון אבשלומוב', 'target_shifts': 3, 'max_shifts': 4, 'role': 'guard', 'history_streak': 0, 'max_mornings': 0, 'min_mornings': 0, 'max_evenings': 0, 'min_evenings': 0, 'max_nights': 0, 'min_nights': 0},
+    {'name': 'אלון אבשלומו', 'target_shifts': 3, 'max_shifts': 4, 'role': 'guard', 'history_streak': 0, 'max_mornings': 0, 'min_mornings': 0, 'max_evenings': 0, 'min_evenings': 0, 'max_nights': 0, 'min_nights': 0},
     {'name': 'אליאב דגו', 'target_shifts': 5, 'max_shifts': 6, 'role': 'guard', 'history_streak': 0, 'max_mornings': 0, 'min_mornings': 0, 'max_evenings': 0, 'min_evenings': 0, 'max_nights': 0, 'min_nights': 0},
     {'name': 'ארתור ארנוביץ', 'target_shifts': 4, 'max_shifts': 4, 'role': 'guard', 'history_streak': 0, 'max_mornings': 0, 'min_mornings': 0, 'max_evenings': 0, 'min_evenings': 0, 'max_nights': 0, 'min_nights': 0},
     {'name': 'בן שפטר', 'target_shifts': 5, 'max_shifts': 6, 'role': 'guard', 'history_streak': 0, 'max_mornings': 0, 'min_mornings': 0, 'max_evenings': 0, 'min_evenings': 0, 'max_nights': 0, 'min_nights': 0},
