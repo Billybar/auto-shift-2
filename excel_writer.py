@@ -20,8 +20,9 @@ def create_excel_schedule(solver, shift_vars, employees, num_days, num_shifts, c
                          top=Side(style='thin'), bottom=Side(style='thin'))
 
     # Conditional formatting colors
-    alert_red_fill = PatternFill(start_color="FFC7CE", end_color="FFC7CE", fill_type="solid")  # Light Red
-    alert_orange_fill = PatternFill(start_color="FCE4D6", end_color="FCE4D6", fill_type="solid")  # Light Orange
+    alert_red_fill = PatternFill(start_color="FFC7CE", end_color="FFC7CE", fill_type="solid")     # Light Red (Under Target)
+    alert_green_fill = PatternFill(start_color="C6EFCE", end_color="C6EFCE", fill_type="solid")   # Light Green (Over Target)
+    alert_orange_fill = PatternFill(start_color="FCE4D6", end_color="FCE4D6", fill_type="solid")  # Light Orange (Too many nights)
 
     days_names = ["ראשון", "שני", "שלישי", "רביעי", "חמישי", "שישי", "שבת"]
 
@@ -219,7 +220,7 @@ def create_excel_schedule(solver, shift_vars, employees, num_days, num_shifts, c
     ws_stats.cell(row=row_cursor, column=1).font = Font(bold=True, size=14)
     row_cursor += 1
 
-    # Added 'Target' column to headers
+    # Headers
     headers = ["שם העובד", "בוקר", "צהריים", "לילה", "תגבור", 'סה"כ', 'יעד']
     for col_idx, h in enumerate(headers, 1):
         c = ws_stats.cell(row=row_cursor, column=col_idx)
@@ -241,11 +242,17 @@ def create_excel_schedule(solver, shift_vars, employees, num_days, num_shifts, c
         # Determine Row Color
         row_fill = None
 
-        # Condition 1: Target > Actual (Light Red)
-        if target > total:
+        # Condition 1: Actual > Target (Light Green) - "Bonus" / Good
+        if total > target:
+            row_fill = alert_green_fill
+
+        # Condition 2: Actual < Target (Light Red) - "Underworked" / Bad
+        # (This overwrites Green if logically impossible, but mutually exclusive anyway)
+        if total < target:
             row_fill = alert_red_fill
 
-        # Condition 2: More than 2 night shifts (Light Orange) - Overwrites Red if both apply
+        # Condition 3: More than 2 night shifts (Light Orange) - Safety Warning
+        # This overwrites Green/Red because safety/burnout warning is higher priority
         if night_shifts > 2:
             row_fill = alert_orange_fill
 
