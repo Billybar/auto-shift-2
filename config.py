@@ -19,7 +19,8 @@ NUM_SHIFTS = 4
 
 # Optimization Weights
 WEIGHTS = {
-    'TARGET_SHIFTS': 20,
+    'TARGET_SHIFTS': 50,
+    'MAX_SHIFTS': 60,
     'REST_GAP': 2,
     'MAX_NIGHTS': 5,
     'MAX_MORNINGS': 4,
