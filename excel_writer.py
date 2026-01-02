@@ -299,6 +299,29 @@ def create_excel_schedule(solver, shift_vars, employees, num_days, num_shifts, c
 
             row_cursor += 1
 
+    # --- Summary Row Calculation ---
+    # Calculate totals for each column based on the data we already have
+    total_morning = sum(shift_counts[e][0] for e in range(len(employees)))
+    total_noon = sum(shift_counts[e][1] for e in range(len(employees)))
+    total_night = sum(shift_counts[e][2] for e in range(len(employees)))
+    total_reinforcement = sum(shift_counts[e][3] for e in range(len(employees)))
+    total_actual = total_morning + total_noon + total_night + total_reinforcement
+    total_target = sum(emp.get('target_shifts', 0) for emp in employees)
+
+    summary_data = ["TOTAL", total_morning, total_noon, total_night, total_reinforcement, total_actual,
+                    total_target]
+
+    # Write the summary row to the sheet
+    for col_idx, val in enumerate(summary_data, 1):
+        c = ws_stats.cell(row=row_cursor, column=col_idx)
+        c.value = val
+        c.font = Font(bold=True)  # Bold font for emphasis
+        c.fill = PatternFill(start_color="DDDDDD", end_color="DDDDDD", fill_type="solid")  # Grey background
+        c.border = thin_border
+        c.alignment = center_align
+
+    row_cursor += 1
+
     row_cursor += 2  # Spacer
 
     # --- Table 3: Controller Shift Summary ---
