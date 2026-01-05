@@ -2,45 +2,90 @@ import openpyxl
 from openpyxl.styles import PatternFill, Font, Alignment, Border, Side
 
 
-def create_excel_schedule(solver, shift_vars, employees, num_days, num_shifts, colors):
-    wb = openpyxl.Workbook()
+# ============================================================================
+# 1. Style Setup
+# ============================================================================
+def _setup_styles():
+    """
+    Creates and returns a dictionary of all OpenPyXL styles used in the workbook.
+    """
+    thin_border = Border(left=Side(style='thin'), right=Side(style='thin'),
+                         top=Side(style='thin'), bottom=Side(style='thin'))
+    center_align = Alignment(horizontal='center', vertical='center', wrap_text=True)
 
-    # --- Sheet 1: Schedule ---
+    return {
+        'header_font': Font(bold=True, color="FFFFFF"),
+        'header_fill': PatternFill(start_color="4472C4", end_color="4472C4", fill_type="solid"),
+        'sub_header_fill': PatternFill(start_color="D9E1F2", end_color="D9E1F2", fill_type="solid"),
+        'stats_header_fill': PatternFill(start_color="70AD47", end_color="70AD47", fill_type="solid"),
+        'orange_header_fill': PatternFill(start_color="ED7D31", end_color="ED7D31", fill_type="solid"),
+        'blue_header_fill': PatternFill(start_color="5B9BD5", end_color="5B9BD5", fill_type="solid"),
+        'grey_fill': PatternFill(start_color="DDDDDD", end_color="DDDDDD", fill_type="solid"),
+
+        # Alerts / Conditional Formatting
+        'alert_red': PatternFill(start_color="FFC7CE", end_color="FFC7CE", fill_type="solid"),
+        'alert_green': PatternFill(start_color="C6EFCE", end_color="C6EFCE", fill_type="solid"),
+        'alert_orange': PatternFill(start_color="FCE4D6", end_color="FCE4D6", fill_type="solid"),
+
+        'border': thin_border,
+        'center': center_align,
+        'right': Alignment(horizontal='right', vertical='center'),
+        'bold': Font(bold=True)
+    }
+
+
+# ============================================================================
+# 2. Logic Helpers
+# ============================================================================
+def _get_shift_counts(solver, shift_vars, employees, num_days, num_shifts):
+    """
+    Calculates the raw number of shifts assigned to each employee by the solver.
+    Returns: dict {emp_idx: {shift_idx: count}}
+    """
+    counts = {i: {s: 0 for s in range(num_shifts)} for i in range(len(employees))}
+    for e_idx in range(len(employees)):
+        for d in range(num_days):
+            for s in range(num_shifts):
+                if solver.Value(shift_vars[(e_idx, d, s)]):
+                    counts[e_idx][s] += 1
+    return counts
+
+
+def _get_employee_rank(employees, emp_idx):
+    """Helper to sort employees by rank: Supervisor > Controller > Guard"""
+    r = employees[emp_idx].get('role', 'guard')
+    if r == 'supervisor': return 3
+    if r == 'controller': return 2
+    return 1
+
+
+# ============================================================================
+# 3. Sheet Generators
+# ============================================================================
+def _create_schedule_sheet(wb, styles, solver, shift_vars, employees, num_days, colors):
+    """
+    Generates the main 'Schedule' sheet.
+    Returns: role_fill_counts (stats on how many times an employee filled a specific role)
+    """
     ws = wb.active
     ws.title = "Schedule"
     ws.sheet_view.rightToLeft = True
 
-    # --- Styles ---
-    header_font = Font(bold=True, color="FFFFFF")
-    header_fill = PatternFill(start_color="4472C4", end_color="4472C4", fill_type="solid")
-    sub_header_fill = PatternFill(start_color="D9E1F2", end_color="D9E1F2", fill_type="solid")
-    center_align = Alignment(horizontal='center', vertical='center', wrap_text=True)
-    thin_border = Border(left=Side(style='thin'), right=Side(style='thin'),
-                         top=Side(style='thin'), bottom=Side(style='thin'))
-
-    # Conditional formatting colors
-    alert_red_fill = PatternFill(start_color="FFC7CE", end_color="FFC7CE", fill_type="solid")
-    alert_green_fill = PatternFill(start_color="C6EFCE", end_color="C6EFCE", fill_type="solid")
-    alert_orange_fill = PatternFill(start_color="FCE4D6", end_color="FCE4D6", fill_type="solid")
-
-    days_names = ["ראשון", "שני", "שלישי", "רביעי", "חמישי", "שישי", "שבת"]
-
-    # --- Main Headers ---
+    # --- Headers ---
     ws.cell(row=1, column=1).value = "זמן"
     ws.cell(row=1, column=2).value = "תפקיד"
+    days_names = ["ראשון", "שני", "שלישי", "רביעי", "חמישי", "שישי", "שבת"]
 
     for i, day in enumerate(days_names):
-        cell = ws.cell(row=1, column=i + 3)
-        cell.value = day
-        cell.font = header_font
-        cell.fill = header_fill
-        cell.alignment = center_align
+        c = ws.cell(row=1, column=i + 3)
+        c.value = day
+        c.font = styles['header_font']
+        c.fill = styles['header_fill']
+        c.alignment = styles['center']
 
-    # -------------------------------------------------------------------------
-    # Layout Definition
-    # -------------------------------------------------------------------------
-    layout_weekday = [
-        # === Building 15 ===
+    # --- Layout Definition ---
+    layout = [
+        # Building 15
         {"title": "בניין 15", "is_header": True},
         {"time": "בוקר", "role": "קבלה", "shift": 0, "role_needed": "guard"},
         {"time": "", "role": "סייר", "shift": 0, "role_needed": "guard"},
@@ -52,7 +97,7 @@ def create_excel_schedule(solver, shift_vars, employees, num_days, num_shifts, c
         {"time": "לילה", "role": "קבלה", "shift": 2, "role_needed": "guard"},
         {"time": "", "role": "סייר", "shift": 2, "role_needed": "guard"},
 
-        # === Building 18 ===
+        # Building 18
         {"title": "בניין 18", "is_header": True},
         {"time": "בוקר", "role": "קבלה", "shift": 0, "role_needed": "guard"},
         {"time": "", "role": "בקרה", "shift": 0, "role_needed": "controller"},
@@ -71,82 +116,69 @@ def create_excel_schedule(solver, shift_vars, employees, num_days, num_shifts, c
     ]
 
     current_row = 2
-    used_assignments = set()
-
-    # --- Data Structures for Statistics ---
-    shift_counts = {i: {0: 0, 1: 0, 2: 0, 3: 0} for i in range(len(employees))}
-
-    # Pre-calculate counts
-    for e_idx in range(len(employees)):
-        for d in range(num_days):
-            for s in range(num_shifts):
-                if solver.Value(shift_vars[(e_idx, d, s)]):
-                    shift_counts[e_idx][s] += 1
-
+    used_assignments = set()  # Track (day, emp_id) to prevent double booking in the visual table
     role_fill_counts = {i: {'supervisor': 0, 'controller': 0, 'guard': 0} for i in range(len(employees))}
 
-    def get_employee_rank(emp_idx):
-        r = employees[emp_idx].get('role', 'guard')
-        if r == 'supervisor': return 3
-        if r == 'controller': return 2
-        return 1
-
-    # --- Generate Schedule Table ---
-    for row_def in layout_weekday:
+    for row_def in layout:
+        # Handle Headers
         if row_def.get("is_header"):
             ws.merge_cells(start_row=current_row, start_column=1, end_row=current_row, end_column=9)
-            cell = ws.cell(row=current_row, column=1)
-            cell.value = row_def["title"]
-            cell.font = Font(bold=True, size=12)
-            cell.fill = sub_header_fill
-            cell.alignment = center_align
+            c = ws.cell(row=current_row, column=1)
+            c.value = row_def["title"]
+            c.font = Font(bold=True, size=12)
+            c.fill = styles['sub_header_fill']
+            c.alignment = styles['center']
             current_row += 1
             continue
 
+        # Handle Spacers
         if row_def.get("is_spacer"):
             current_row += 1
             continue
 
-        time_cell = ws.cell(row=current_row, column=1)
-        time_cell.value = row_def["time"]
-        time_cell.border = thin_border
-        time_cell.alignment = center_align
-        if row_def["time"]: time_cell.font = Font(bold=True)
+        # Handle Data Row
+        time_c = ws.cell(row=current_row, column=1)
+        time_c.value = row_def["time"]
+        time_c.border = styles['border']
+        time_c.alignment = styles['center']
+        if row_def["time"]: time_c.font = styles['bold']
 
-        role_cell = ws.cell(row=current_row, column=2)
-        role_cell.value = row_def["role"]
-        role_cell.border = thin_border
-        role_cell.alignment = Alignment(horizontal='right', vertical='center')
+        role_c = ws.cell(row=current_row, column=2)
+        role_c.value = row_def["role"]
+        role_c.border = styles['border']
+        role_c.alignment = styles['right']
 
         shift_idx = row_def["shift"]
         role_needed = row_def["role_needed"]
 
+        # Fill Days
         for d in range(num_days):
             cell = ws.cell(row=current_row, column=d + 3)
-            cell.border = thin_border
-            cell.alignment = center_align
-            is_weekend = (d >= 5)
+            cell.border = styles['border']
+            cell.alignment = styles['center']
 
+            # Weekend Filter (Skip non-existent shifts on weekends)
+            is_weekend = (d >= 5)
             skip = False
             if is_weekend and (shift_idx == 3 or "אחמ\"ש" in row_def["role"]):
                 cell.fill = PatternFill(start_color="E7E6E6", end_color="E7E6E6", fill_type="solid")
                 skip = True
 
             if not skip:
-                candidates = []
-                for e_idx, emp in enumerate(employees):
-                    if solver.Value(shift_vars[(e_idx, d, shift_idx)]):
-                        candidates.append(e_idx)
+                # Find valid employee for this slot
+                candidates = [e for e in range(len(employees)) if solver.Value(shift_vars[(e, d, shift_idx)])]
 
+                # Sort logic (Higher rank preferred for specialized roles)
                 if role_needed == 'guard':
-                    candidates.sort(key=get_employee_rank)
+                    candidates.sort(key=lambda x: _get_employee_rank(employees, x))
                 elif role_needed == 'controller':
-                    candidates.sort(key=lambda x: (0 if get_employee_rank(x) == 2 else 1))
+                    candidates.sort(key=lambda x: (0 if _get_employee_rank(employees, x) == 2 else 1))
 
                 assigned_emp = None
                 for cand_idx in candidates:
                     if (d, cand_idx) in used_assignments: continue
 
+                    # Verify Role Match
                     emp_role = employees[cand_idx].get('role', 'guard')
                     is_match = False
                     if role_needed == 'guard':
@@ -162,138 +194,157 @@ def create_excel_schedule(solver, shift_vars, employees, num_days, num_shifts, c
                         role_fill_counts[assigned_emp][role_needed] += 1
                         break
 
+                # Write to Cell
                 if assigned_emp is not None:
                     name = employees[assigned_emp]['name']
-                    color = colors[assigned_emp] if assigned_emp < len(colors) else "FFFFFF"
+                    # Handle colors safely
+                    c_code = colors[assigned_emp] if assigned_emp < len(colors) else "FFFFFF"
                     cell.value = name
-                    cell.fill = PatternFill(start_color=color, end_color=color, fill_type="solid")
+                    cell.fill = PatternFill(start_color=c_code, end_color=c_code, fill_type="solid")
+
         current_row += 1
 
-    # =========================================================================
-    # Sheet 2: Statistics
-    # =========================================================================
-    ws_stats = wb.create_sheet("סטטיסטיקות")
-    ws_stats.sheet_view.rightToLeft = True
-    stats_header_fill = PatternFill(start_color="70AD47", end_color="70AD47", fill_type="solid")
+    return role_fill_counts
 
-    # --- Table 1: Shift Type Summary ---
-    row_cursor = 2
-    ws_stats.cell(row=row_cursor, column=1).value = "סיכום משמרות לעובד"
-    ws_stats.cell(row=row_cursor, column=1).font = Font(bold=True, size=14)
-    row_cursor += 1
+
+def _create_stats_sheet(wb, styles, employees, shift_counts, role_fill_counts):
+    """
+    Generates the 'Statistics' sheet using pre-calculated counts.
+    """
+    ws = wb.create_sheet("סטטיסטיקות")
+    ws.sheet_view.rightToLeft = True
+
+    # --- Table 1: General Shift Counts ---
+    row = 2
+    ws.cell(row=row, column=1).value = "סיכום משמרות לעובד"
+    ws.cell(row=row, column=1).font = Font(bold=True, size=14)
+    row += 1
 
     headers = ["שם העובד", "בוקר", "צהריים", "לילה", "תגבור", 'סה"כ', 'יעד']
-    for col_idx, h in enumerate(headers, 1):
-        c = ws_stats.cell(row=row_cursor, column=col_idx)
+    for idx, h in enumerate(headers, 1):
+        c = ws.cell(row=row, column=idx)
         c.value = h
-        c.font = header_font
-        c.fill = stats_header_fill
-        c.alignment = center_align
-        c.border = thin_border
-    row_cursor += 1
+        c.font = styles['header_font']
+        c.fill = styles['stats_header_fill']
+        c.alignment = styles['center']
+        c.border = styles['border']
+    row += 1
+
+    # Totals for summary row
+    totals = [0, 0, 0, 0, 0, 0]  # Morn, Noon, Night, Reinf, Actual, Target
 
     for e_idx, emp in enumerate(employees):
         counts = shift_counts[e_idx]
-        total = counts[0] + counts[1] + counts[2] + counts[3]
+        total = sum(counts.values())
         target = emp.get('target_shifts', 0)
-        night_shifts = counts[2]
+
+        # Aggregate totals
+        totals[0] += counts[0];
+        totals[1] += counts[1];
+        totals[2] += counts[2];
+        totals[3] += counts[3]
+        totals[4] += total;
+        totals[5] += target
 
         row_data = [emp['name'], counts[0], counts[1], counts[2], counts[3], total, target]
-        row_fill = None
-        if total > target: row_fill = alert_green_fill
-        if total < target: row_fill = alert_red_fill
-        if night_shifts > 2: row_fill = alert_orange_fill
 
-        for col_idx, val in enumerate(row_data, 1):
-            c = ws_stats.cell(row=row_cursor, column=col_idx)
+        fill = None
+        if total > target:
+            fill = styles['alert_green']
+        elif total < target:
+            fill = styles['alert_red']
+        if counts[2] > 2: fill = styles['alert_orange']
+
+        for idx, val in enumerate(row_data, 1):
+            c = ws.cell(row=row, column=idx)
             c.value = val
-            c.border = thin_border
-            c.alignment = center_align
-            if row_fill: c.fill = row_fill
-        row_cursor += 1
+            c.border = styles['border']
+            c.alignment = styles['center']
+            if fill: c.fill = fill
+        row += 1
 
-    # --- Summary Row Calculation (MOVED HERE) ---
-    # This must happen immediately after Table 1 is finished
-    total_morning = sum(shift_counts[e][0] for e in range(len(employees)))
-    total_noon = sum(shift_counts[e][1] for e in range(len(employees)))
-    total_night = sum(shift_counts[e][2] for e in range(len(employees)))
-    total_reinforcement = sum(shift_counts[e][3] for e in range(len(employees)))
-    total_actual = total_morning + total_noon + total_night + total_reinforcement
-    total_target = sum(emp.get('target_shifts', 0) for emp in employees)
-
-    summary_data = ["TOTAL", total_morning, total_noon, total_night, total_reinforcement, total_actual, total_target]
-
-    for col_idx, val in enumerate(summary_data, 1):
-        c = ws_stats.cell(row=row_cursor, column=col_idx)
+    # Summary Row
+    summary_vals = ["TOTAL"] + totals
+    for idx, val in enumerate(summary_vals, 1):
+        c = ws.cell(row=row, column=idx)
         c.value = val
-        c.font = Font(bold=True)
-        c.fill = PatternFill(start_color="DDDDDD", end_color="DDDDDD", fill_type="solid")
-        c.border = thin_border
-        c.alignment = center_align
+        c.font = styles['bold']
+        c.fill = styles['grey_fill']
+        c.border = styles['border']
+        c.alignment = styles['center']
+    row += 3
 
-    row_cursor += 1  # Move cursor past the Total row
-    row_cursor += 2  # Spacer between tables
+    # --- Table 2: Supervisor Stats ---
+    # Show ONLY employees with role='supervisor'
+    _create_role_table(ws, row, "סיכום משמרות אחמ\"ש", "שם האחמ\"ש", 'סה"כ משמרות בתפקיד אחמ"ש',
+                       employees, role_fill_counts, 'supervisor', ['supervisor'],
+                       styles['orange_header_fill'], styles)
 
-    # --- Table 2: Supervisor Shift Summary ---
-    ws_stats.cell(row=row_cursor, column=1).value = 'סיכום משמרות אחמ"ש'
-    ws_stats.cell(row=row_cursor, column=1).font = Font(bold=True, size=14)
-    row_cursor += 1
+    # Calculate offset
+    supervisor_count = len([e for e in employees if e.get('role') == 'supervisor'])
+    row += (supervisor_count + 4)
 
-    ws_stats.cell(row=row_cursor, column=1).value = "שם האחמ\"ש"
-    ws_stats.cell(row=row_cursor, column=2).value = 'סה"כ משמרות בתפקיד אחמ"ש'
-    for c_i in [1, 2]:
-        c = ws_stats.cell(row=row_cursor, column=c_i)
-        c.font = header_font
-        c.fill = PatternFill(start_color="ED7D31", end_color="ED7D31", fill_type="solid")
-        c.border = thin_border
-    row_cursor += 1
+    # --- Table 3: Controller Stats ---
+    # Show ONLY employees with role='controller' (Excluding supervisors who did controller shifts)
+    _create_role_table(ws, row, "סיכום משמרות בקרה", "שם הבקר", 'סה"כ משמרות בתפקיד בקר',
+                       employees, role_fill_counts, 'controller', ['controller'],
+                       styles['blue_header_fill'], styles)
+
+
+def _create_role_table(ws, start_row, title, col1_name, col2_name, employees, role_fill_counts, role_key, filter_roles,
+                       header_fill, styles):
+    """
+    Helper to create stats table for specific roles.
+    filter_roles: List of employee roles to include in this table (e.g. ['controller']).
+    """
+    ws.cell(row=start_row, column=1).value = title
+    ws.cell(row=start_row, column=1).font = Font(bold=True, size=14)
+    start_row += 1
+
+    ws.cell(row=start_row, column=1).value = col1_name
+    ws.cell(row=start_row, column=2).value = col2_name
+    for i in [1, 2]:
+        c = ws.cell(row=start_row, column=i)
+        c.font = styles['header_font']
+        c.fill = header_fill
+        c.border = styles['border']
+    start_row += 1
 
     for e_idx, emp in enumerate(employees):
-        if emp.get('role') == 'supervisor':
-            shifts_as_sup = role_fill_counts[e_idx]['supervisor']
+        # Only list employees whose MAIN role matches the filter list
+        if emp.get('role') in filter_roles:
+            count = role_fill_counts[e_idx][role_key]
 
-            c1 = ws_stats.cell(row=row_cursor, column=1)
+            c1 = ws.cell(row=start_row, column=1)
             c1.value = emp['name']
-            c1.border = thin_border
+            c1.border = styles['border']
 
-            c2 = ws_stats.cell(row=row_cursor, column=2)
-            c2.value = shifts_as_sup
-            c2.border = thin_border
-            c2.alignment = center_align
-            row_cursor += 1
+            c2 = ws.cell(row=start_row, column=2)
+            c2.value = count
+            c2.border = styles['border']
+            c2.alignment = styles['center']
+            start_row += 1
 
-    row_cursor += 2  # Spacer
 
-    # --- Table 3: Controller Shift Summary ---
-    ws_stats.cell(row=row_cursor, column=1).value = 'סיכום משמרות בקרה'
-    ws_stats.cell(row=row_cursor, column=1).font = Font(bold=True, size=14)
-    row_cursor += 1
+# ============================================================================
+# 4. Main Entry Point
+# ============================================================================
+def create_excel_schedule(solver, shift_vars, employees, num_days, num_shifts, colors):
+    # 1. Init Workbook & Styles
+    wb = openpyxl.Workbook()
+    styles = _setup_styles()
 
-    ws_stats.cell(row=row_cursor, column=1).value = "שם הבקר"
-    ws_stats.cell(row=row_cursor, column=2).value = 'סה"כ משמרות בתפקיד בקר'
-    for c_i in [1, 2]:
-        c = ws_stats.cell(row=row_cursor, column=c_i)
-        c.font = header_font
-        c.fill = PatternFill(start_color="5B9BD5", end_color="5B9BD5", fill_type="solid")
-        c.border = thin_border
-    row_cursor += 1
+    # 2. Create Schedule Sheet & Get Role Stats
+    # (We need role_fill_counts for the statistics sheet later)
+    role_fill_counts = _create_schedule_sheet(wb, styles, solver, shift_vars, employees, num_days, colors)
 
-    for e_idx, emp in enumerate(employees):
-        if emp.get('role') in ['controller', 'supervisor']:
-            if emp.get('role') == 'controller':
-                shifts_as_con = role_fill_counts[e_idx]['controller']
+    # 3. Calculate Shift Counts (Raw data from solver)
+    shift_counts = _get_shift_counts(solver, shift_vars, employees, num_days, num_shifts)
 
-                c1 = ws_stats.cell(row=row_cursor, column=1)
-                c1.value = emp['name']
-                c1.border = thin_border
+    # 4. Create Statistics Sheet
+    _create_stats_sheet(wb, styles, employees, shift_counts, role_fill_counts)
 
-                c2 = ws_stats.cell(row=row_cursor, column=2)
-                c2.value = shifts_as_con
-                c2.border = thin_border
-                c2.alignment = center_align
-                row_cursor += 1
-
-    # --- Save ---
+    # 5. Save
     output_filename = "shift_schedule_output/shift_schedule_colored.xlsx"
     wb.save(output_filename)
-    print(f"Excel file created successfully with Statistics: {output_filename}")
+    print(f"Excel file created successfully: {output_filename}")
