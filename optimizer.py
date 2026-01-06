@@ -164,6 +164,25 @@ def _build_objective_function(model, shift_vars, employees, num_days, num_shifts
     w = config.WEIGHTS
     objective_terms = []
 
+    # --- Helper: Identify Supervisor Slots (Slots that explicitly require a supervisor) ---
+    supervisor_slots = []
+    weekend_days = [5, 6]
+    for d in range(num_days):
+        daily_config = config.WEEKEND_DEMAND if d in weekend_days else config.WEEKDAY_DEMAND
+        for s in range(num_shifts):
+            if daily_config.get(s, {}).get('supervisor', 0) > 0:
+                supervisor_slots.append((d, s))
+
+    total_supervisor_demand = len(supervisor_slots)  # Should be 15 per your description
+
+    # Calculate Total Capacity of Supervisors (Sum of their targets)
+    supervisors_indices = [i for i, emp in enumerate(employees) if emp.get('role') == 'supervisor']
+    total_supervisor_capacity = sum(employees[i]['target_shifts'] for i in supervisors_indices)
+
+    # Avoid division by zero
+    if total_supervisor_capacity == 0:
+        total_supervisor_capacity = 1
+
     for e in range(len(employees)):
         # Gather shift lists for easy summing
         all_shifts = []
@@ -242,7 +261,7 @@ def _build_objective_function(model, shift_vars, employees, num_days, num_shifts
         if e in worked_last_sat_night:
             objective_terms.append(shift_vars[(e, 0, 1)] * w['REST_GAP'])
 
-        # --- D. Target Shifts (Balance) ---
+        # --- D. Target Shifts (General Balance) ---
         total_worked = sum(all_shifts)
         target = employees[e]['target_shifts']
 
@@ -263,6 +282,30 @@ def _build_objective_function(model, shift_vars, employees, num_days, num_shifts
 
         # 3. Hard Limit (Absolute Max)
         model.Add(total_worked <= employees[e]['max_shifts'])
+
+        # --- E. Proportional Supervisor Role Distribution (NEW FEATURE) ---
+        # Ensures that the specific 15 "Supervisor" shifts are distributed based on job ratio.
+        if employees[e].get('role') == 'supervisor':
+            # 1. Calculate how many ACTUAL supervisor shifts this employee is assigned
+            assigned_sup_shifts = sum(shift_vars[(e, d, s)] for d, s in supervisor_slots)
+
+            # 2. Calculate Expected Share using Cross-Multiplication (to avoid floats)
+            # Formula: (Actual / Demand) approx (Target / Capacity)
+            # Integer Logic: Actual * Capacity approx Target * Demand
+
+            val_actual = assigned_sup_shifts * total_supervisor_capacity
+            val_expected = target * total_supervisor_demand
+
+            # 3. Add Penalty for deviation
+            sup_delta = model.NewIntVar(-1000, 1000, f'sup_delta_{e}')
+            model.Add(sup_delta == val_actual - val_expected)
+
+            abs_sup_delta = model.NewIntVar(0, 1000, f'abs_sup_delta_{e}')
+            model.AddAbsEquality(abs_sup_delta, sup_delta)
+
+            # Use a high weight to prioritize this fairness
+            # We scale it down slightly because we multiplied by capacity (e.g. 30) earlier
+            objective_terms.append(abs_sup_delta * 5)
 
     model.Minimize(sum(objective_terms))
 
