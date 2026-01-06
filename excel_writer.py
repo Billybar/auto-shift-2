@@ -21,7 +21,8 @@ def _setup_styles():
         'orange_header_fill': PatternFill(start_color="ED7D31", end_color="ED7D31", fill_type="solid"),
         'blue_header_fill': PatternFill(start_color="5B9BD5", end_color="5B9BD5", fill_type="solid"),
         'purple_header_fill': PatternFill(start_color="7030A0", end_color="7030A0", fill_type="solid"),
-        # New color for unified table
+        'red_header_fill': PatternFill(start_color="C00000", end_color="C00000", fill_type="solid"),
+        # New for penalties
         'grey_fill': PatternFill(start_color="DDDDDD", end_color="DDDDDD", fill_type="solid"),
 
         # Alerts / Conditional Formatting
@@ -42,7 +43,6 @@ def _setup_styles():
 def _get_shift_counts(solver, shift_vars, employees, num_days, num_shifts):
     """
     Calculates the raw number of shifts assigned to each employee by the solver.
-    Returns: dict {emp_idx: {shift_idx: count}}
     """
     counts = {i: {s: 0 for s in range(num_shifts)} for i in range(len(employees))}
     for e_idx in range(len(employees)):
@@ -61,14 +61,63 @@ def _get_employee_rank(employees, emp_idx):
     return 1
 
 
+def _calculate_penalty_counts(solver, shift_vars, employees, num_days, num_shifts):
+    """
+    Scans the solution to count specific violations per employee.
+    Returns: dict {emp_idx: {'chain_3': int, 'rest_gap': int, 'consecutive_nights': int}}
+    """
+    penalties = {i: {'chain_3': 0, 'rest_gap': 0, 'consecutive_nights': 0} for i in range(len(employees))}
+
+    # Helper lambda to check if working specific shift
+    is_working = lambda e, d, s: solver.Value(shift_vars[(e, d, s)]) == 1
+
+    # Helper: Check if working Morning (0) OR Reinforcement (3)
+    def is_morn_reinf(e, d):
+        if d >= num_days: return False
+        return is_working(e, d, 0) or is_working(e, d, 3)
+
+    for e in range(len(employees)):
+
+        # 1. Count Consecutive Nights (3 in a row)
+        for d in range(num_days - 2):
+            if is_working(e, d, 2) and is_working(e, d + 1, 2) and is_working(e, d + 2, 2):
+                penalties[e]['consecutive_nights'] += 1
+
+        # 2. Count Rest Gaps (Work -> Skip 1 -> Work)
+        # Flatten schedule to linear timeline
+        total_slots = num_days * num_shifts
+        for t in range(total_slots - 2):
+            d1, s1 = t // num_shifts, t % num_shifts
+            d2, s2 = (t + 2) // num_shifts, (t + 2) % num_shifts
+
+            # Note: We must be careful not to double count "Chain 3" as regular gaps if possible,
+            # but usually they are counted separately in optimization.
+            if solver.Value(shift_vars[(e, d1, s1)]) and solver.Value(shift_vars[(e, d2, s2)]):
+                penalties[e]['rest_gap'] += 1
+
+        # 3. Count Chain 3 (The 8-8-8 Patterns: A, B, C)
+        for d in range(num_days - 1):
+            # Pattern A: (Morn/Reinf D) -> (Night D) -> (Noon D+1)
+            if is_morn_reinf(e, d) and is_working(e, d, 2) and is_working(e, d + 1, 1):
+                penalties[e]['chain_3'] += 1
+
+            # Pattern B: (Noon D) -> (Morn/Reinf D+1) -> (Night D+1)
+            if is_working(e, d, 1) and is_morn_reinf(e, d + 1) and is_working(e, d + 1, 2):
+                penalties[e]['chain_3'] += 1
+
+            # Pattern C: (Night D) -> (Noon D+1) -> (Morn/Reinf D+2)
+            if d < num_days - 2:
+                if is_working(e, d, 2) and is_working(e, d + 1, 1) and is_morn_reinf(e, d + 2):
+                    penalties[e]['chain_3'] += 1
+
+    return penalties
+
+
 # ============================================================================
 # 3. Sheet Generators
 # ============================================================================
 def _create_schedule_sheet(wb, styles, solver, shift_vars, employees, num_days, colors):
-    """
-    Generates the main 'Schedule' sheet.
-    Returns: role_fill_counts (stats on how many times an employee filled a specific role)
-    """
+    """Generates the main 'Schedule' sheet."""
     ws = wb.active
     ws.title = "Schedule"
     ws.sheet_view.rightToLeft = True
@@ -118,11 +167,10 @@ def _create_schedule_sheet(wb, styles, solver, shift_vars, employees, num_days, 
     ]
 
     current_row = 2
-    used_assignments = set()  # Track (day, emp_id) to prevent double booking in the visual table
+    used_assignments = set()
     role_fill_counts = {i: {'supervisor': 0, 'controller': 0, 'guard': 0} for i in range(len(employees))}
 
     for row_def in layout:
-        # Handle Headers
         if row_def.get("is_header"):
             ws.merge_cells(start_row=current_row, start_column=1, end_row=current_row, end_column=9)
             c = ws.cell(row=current_row, column=1)
@@ -133,12 +181,10 @@ def _create_schedule_sheet(wb, styles, solver, shift_vars, employees, num_days, 
             current_row += 1
             continue
 
-        # Handle Spacers
         if row_def.get("is_spacer"):
             current_row += 1
             continue
 
-        # Handle Data Row
         time_c = ws.cell(row=current_row, column=1)
         time_c.value = row_def["time"]
         time_c.border = styles['border']
@@ -153,13 +199,11 @@ def _create_schedule_sheet(wb, styles, solver, shift_vars, employees, num_days, 
         shift_idx = row_def["shift"]
         role_needed = row_def["role_needed"]
 
-        # Fill Days
         for d in range(num_days):
             cell = ws.cell(row=current_row, column=d + 3)
             cell.border = styles['border']
             cell.alignment = styles['center']
 
-            # Weekend Filter (Skip non-existent shifts on weekends)
             is_weekend = (d >= 5)
             skip = False
             if is_weekend and (shift_idx == 3 or "אחמ\"ש" in row_def["role"]):
@@ -167,10 +211,8 @@ def _create_schedule_sheet(wb, styles, solver, shift_vars, employees, num_days, 
                 skip = True
 
             if not skip:
-                # Find valid employee for this slot
                 candidates = [e for e in range(len(employees)) if solver.Value(shift_vars[(e, d, shift_idx)])]
 
-                # Sort logic (Higher rank preferred for specialized roles)
                 if role_needed == 'guard':
                     candidates.sort(key=lambda x: _get_employee_rank(employees, x))
                 elif role_needed == 'controller':
@@ -180,7 +222,6 @@ def _create_schedule_sheet(wb, styles, solver, shift_vars, employees, num_days, 
                 for cand_idx in candidates:
                     if (d, cand_idx) in used_assignments: continue
 
-                    # Verify Role Match
                     emp_role = employees[cand_idx].get('role', 'guard')
                     is_match = False
                     if role_needed == 'guard':
@@ -196,10 +237,8 @@ def _create_schedule_sheet(wb, styles, solver, shift_vars, employees, num_days, 
                         role_fill_counts[assigned_emp][role_needed] += 1
                         break
 
-                # Write to Cell
                 if assigned_emp is not None:
                     name = employees[assigned_emp]['name']
-                    # Handle colors safely
                     c_code = colors[assigned_emp] if assigned_emp < len(colors) else "FFFFFF"
                     cell.value = name
                     cell.fill = PatternFill(start_color=c_code, end_color=c_code, fill_type="solid")
@@ -210,9 +249,7 @@ def _create_schedule_sheet(wb, styles, solver, shift_vars, employees, num_days, 
 
 
 def _create_stats_sheet(wb, styles, employees, shift_counts, role_fill_counts):
-    """
-    Generates the 'Statistics' sheet using pre-calculated counts.
-    """
+    """Generates the 'Statistics' sheet."""
     ws = wb.create_sheet("סטטיסטיקות")
     ws.sheet_view.rightToLeft = True
 
@@ -232,15 +269,13 @@ def _create_stats_sheet(wb, styles, employees, shift_counts, role_fill_counts):
         c.border = styles['border']
     row += 1
 
-    # Totals for summary row
-    totals = [0, 0, 0, 0, 0, 0]  # Morn, Noon, Night, Reinf, Actual, Target
+    totals = [0, 0, 0, 0, 0, 0]
 
     for e_idx, emp in enumerate(employees):
         counts = shift_counts[e_idx]
         total = sum(counts.values())
         target = emp.get('target_shifts', 0)
 
-        # Aggregate totals
         totals[0] += counts[0];
         totals[1] += counts[1];
         totals[2] += counts[2];
@@ -265,7 +300,6 @@ def _create_stats_sheet(wb, styles, employees, shift_counts, role_fill_counts):
             if fill: c.fill = fill
         row += 1
 
-    # Summary Row
     summary_vals = ["TOTAL"] + totals
     for idx, val in enumerate(summary_vals, 1):
         c = ws.cell(row=row, column=idx)
@@ -281,16 +315,10 @@ def _create_stats_sheet(wb, styles, employees, shift_counts, role_fill_counts):
 
 
 def _create_unified_stats_table(ws, start_row, styles, employees, role_fill_counts):
-    """
-    Creates a unified table for all 'Senior' staff (Supervisors and Controllers).
-    Shows the breakdown of their specialized shifts vs their target.
-    """
-    # Title
     ws.cell(row=start_row, column=1).value = "סיכום משמרות בכירים (אחמ\"ש + בקרה)"
     ws.cell(row=start_row, column=1).font = Font(bold=True, size=14)
     start_row += 1
 
-    # Headers
     headers = ["שם העובד", "תפקיד", "משמרות אחמ\"ש", "משמרות בקרה", "סה\"כ בכירים", "יעד"]
     for idx, h in enumerate(headers, 1):
         c = ws.cell(row=start_row, column=idx)
@@ -301,17 +329,12 @@ def _create_unified_stats_table(ws, start_row, styles, employees, role_fill_coun
         c.alignment = styles['center']
     start_row += 1
 
-    # Data Rows
     for e_idx, emp in enumerate(employees):
-        # Filter: Only Supervisors and Controllers
         role = emp.get('role', 'guard')
         if role not in ['supervisor', 'controller']:
             continue
 
-        # Determine Display Role
         role_display = "אחמ\"ש" if role == 'supervisor' else "בקר"
-
-        # Get Counts
         sup_count = role_fill_counts[e_idx]['supervisor']
         ctrl_count = role_fill_counts[e_idx]['controller']
         total_special = sup_count + ctrl_count
@@ -319,11 +342,7 @@ def _create_unified_stats_table(ws, start_row, styles, employees, role_fill_coun
 
         row_data = [emp['name'], role_display, sup_count, ctrl_count, total_special, target]
 
-        # Conditional Formatting Logic (Visual aid)
         fill = None
-        # Example: if total special shifts match target exactly -> Green, else Red?
-        # Since we optimize for fairness, let's mark deviations.
-        # Note: This is a rough heuristic for coloring.
         if total_special == target:
             fill = styles['alert_green']
         elif abs(total_special - target) >= 2:
@@ -334,13 +353,61 @@ def _create_unified_stats_table(ws, start_row, styles, employees, role_fill_coun
             c.value = val
             c.border = styles['border']
             c.alignment = styles['center']
-
-            # Apply fill to the 'Total Special' column specifically or entire row?
-            # Let's apply to Total and Target columns for clarity
-            if idx in [5, 6] and fill:
-                c.fill = fill
-
+            if idx in [5, 6] and fill: c.fill = fill
         start_row += 1
+
+
+def _create_penalty_sheet(wb, styles, employees, penalty_data):
+    """
+    Creates a dedicated sheet for penalties (Rest Gap, Chain 3, Consecutive Nights).
+    Only lists employees who have at least one penalty.
+    """
+    ws = wb.create_sheet("דוח חריגות ושחיקה")
+    ws.sheet_view.rightToLeft = True
+
+    row = 2
+    ws.cell(row=row, column=1).value = "דוח חריגות ושחיקה"
+    ws.cell(row=row, column=1).font = Font(bold=True, size=14)
+    row += 1
+
+    headers = ["שם העובד", "רצף שחיקה כבד (Chain 3)", "מרווח מנוחה קצר (Rest Gap)", "3 לילות ברצף"]
+
+    for idx, h in enumerate(headers, 1):
+        c = ws.cell(row=row, column=idx)
+        c.value = h
+        c.font = styles['header_font']
+        c.fill = styles['red_header_fill']
+        c.alignment = styles['center']
+        c.border = styles['border']
+        # Set column width
+        ws.column_dimensions[openpyxl.utils.get_column_letter(idx)].width = 25
+    row += 1
+
+    has_content = False
+
+    for e_idx, emp in enumerate(employees):
+        p = penalty_data[e_idx]
+        total_p = p['chain_3'] + p['rest_gap'] + p['consecutive_nights']
+
+        if total_p > 0:
+            has_content = True
+            row_data = [emp['name'], p['chain_3'], p['rest_gap'], p['consecutive_nights']]
+
+            for c_idx, val in enumerate(row_data, 1):
+                cell = ws.cell(row=row, column=c_idx)
+                cell.value = val
+                cell.border = styles['border']
+                cell.alignment = styles['center']
+
+                # Highlight specific cells with issues
+                if c_idx > 1 and isinstance(val, int) and val > 0:
+                    cell.fill = styles['alert_red']
+                    cell.font = styles['bold']
+
+            row += 1
+
+    if not has_content:
+        ws.cell(row=row, column=1).value = "לא נמצאו חריגות."
 
 
 # ============================================================================
@@ -352,16 +419,21 @@ def create_excel_schedule(solver, shift_vars, employees, num_days, num_shifts, c
     styles = _setup_styles()
 
     # 2. Create Schedule Sheet & Get Role Stats
-    # (We need role_fill_counts for the statistics sheet later)
     role_fill_counts = _create_schedule_sheet(wb, styles, solver, shift_vars, employees, num_days, colors)
 
     # 3. Calculate Shift Counts (Raw data from solver)
     shift_counts = _get_shift_counts(solver, shift_vars, employees, num_days, num_shifts)
 
-    # 4. Create Statistics Sheet
+    # 4. Calculate Penalties (NEW)
+    penalty_counts = _calculate_penalty_counts(solver, shift_vars, employees, num_days, num_shifts)
+
+    # 5. Create Statistics Sheet
     _create_stats_sheet(wb, styles, employees, shift_counts, role_fill_counts)
 
-    # 5. Save
+    # 6. Create Penalty Sheet (NEW)
+    _create_penalty_sheet(wb, styles, employees, penalty_counts)
+
+    # 7. Save
     output_filename = "shift_schedule_output/shift_schedule_colored.xlsx"
     wb.save(output_filename)
     print(f"Excel file created successfully: {output_filename}")

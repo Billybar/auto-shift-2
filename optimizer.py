@@ -266,23 +266,76 @@ def _build_objective_function(model, shift_vars, employees, num_days, num_shifts
                 bad_gap.Not())
             objective_terms.append(bad_gap * w['REST_GAP'])
 
-        # 2. HEAVY PENALTY Gap Check: Work(t) -> Gap -> Work(t+2) -> Gap -> Work(t+4)
-        # This penalizes the specific exhausting 3-shift chain heavily
+        # 2. Smart Heavy Burnout Check (8-8-8 Pattern)
+        # Identifies exhausting sequences: Work -> 8h Rest -> Work -> 8h Rest -> Work
         if 'CHAIN_3_PENALTY' in w:
-            for t in range(total_slots - 4):
-                d1, s1 = t // num_shifts, t % num_shifts
-                d2, s2 = (t + 2) // num_shifts, (t + 2) % num_shifts
-                d3, s3 = (t + 4) // num_shifts, (t + 4) % num_shifts
+            for d in range(num_days - 1):
+                # --- Helper Vars: Is employee working Morning OR Reinforcement? ---
 
-                is_chain_3 = model.NewBoolVar(f'chain3_{e}_{t}')
+                # Check for Day D
+                is_morn_reinf_today = model.NewBoolVar(f'is_mr_{e}_{d}')
+                model.AddBoolOr([shift_vars[(e, d, 0)], shift_vars[(e, d, 3)]]).OnlyEnforceIf(is_morn_reinf_today)
+                model.AddBoolAnd([shift_vars[(e, d, 0)].Not(), shift_vars[(e, d, 3)].Not()]).OnlyEnforceIf(
+                    is_morn_reinf_today.Not())
+
+                # Check for Day D+1
+                is_morn_reinf_tom = model.NewBoolVar(f'is_mr_{e}_{d + 1}')
+                model.AddBoolOr([shift_vars[(e, d + 1, 0)], shift_vars[(e, d + 1, 3)]]).OnlyEnforceIf(
+                    is_morn_reinf_tom)
+                model.AddBoolAnd([shift_vars[(e, d + 1, 0)].Not(), shift_vars[(e, d + 1, 3)].Not()]).OnlyEnforceIf(
+                    is_morn_reinf_tom.Not())
+
+                # --- Pattern A: (Morn/Reinf D) -> (Night D) -> (Noon D+1) ---
+                # Sequence: Early Start -> Late Finish -> Mid Start next day
+                is_chain_a = model.NewBoolVar(f'chainA_{e}_{d}')
                 model.AddBoolAnd([
-                    shift_vars[(e, d1, s1)],
-                    shift_vars[(e, d2, s2)],
-                    shift_vars[(e, d3, s3)]
-                ]).OnlyEnforceIf(is_chain_3)
+                    is_morn_reinf_today,
+                    shift_vars[(e, d, 2)],
+                    shift_vars[(e, d + 1, 1)]
+                ]).OnlyEnforceIf(is_chain_a)
+                # Logic inversion
+                model.AddBoolOr([is_morn_reinf_today.Not(), shift_vars[(e, d, 2)].Not(),
+                                 shift_vars[(e, d + 1, 1)].Not()]).OnlyEnforceIf(is_chain_a.Not())
 
-                # Apply the heavy ("quadratic") penalty
-                objective_terms.append(is_chain_3 * w['CHAIN_3_PENALTY'])
+                objective_terms.append(is_chain_a * w['CHAIN_3_PENALTY'])
+
+                # --- Pattern B: (Noon D) -> (Morn/Reinf D+1) -> (Night D+1) ---
+                # Sequence: Noon -> Early Start next day -> Late Finish next day
+                is_chain_b = model.NewBoolVar(f'chainB_{e}_{d}')
+                model.AddBoolAnd([
+                    shift_vars[(e, d, 1)],
+                    is_morn_reinf_tom,
+                    shift_vars[(e, d + 1, 2)]
+                ]).OnlyEnforceIf(is_chain_b)
+                # Logic inversion
+                model.AddBoolOr([shift_vars[(e, d, 1)].Not(), is_morn_reinf_tom.Not(),
+                                 shift_vars[(e, d + 1, 2)].Not()]).OnlyEnforceIf(is_chain_b.Not())
+
+                objective_terms.append(is_chain_b * w['CHAIN_3_PENALTY'])
+
+                # --- Pattern C: (Night D) -> (Noon D+1) -> (Morn/Reinf D+2) ---
+                # Sequence: Night -> Noon next day -> Early Start the following day
+                # Must check bounds for D+2
+                if d < num_days - 2:
+                    # Check for Day D+2
+                    is_morn_reinf_after_tom = model.NewBoolVar(f'is_mr_{e}_{d + 2}')
+                    model.AddBoolOr([shift_vars[(e, d + 2, 0)], shift_vars[(e, d + 2, 3)]]).OnlyEnforceIf(
+                        is_morn_reinf_after_tom)
+                    model.AddBoolAnd(
+                        [shift_vars[(e, d + 2, 0)].Not(), shift_vars[(e, d + 2, 3)].Not()]).OnlyEnforceIf(
+                        is_morn_reinf_after_tom.Not())
+
+                    is_chain_c = model.NewBoolVar(f'chainC_{e}_{d}')
+                    model.AddBoolAnd([
+                        shift_vars[(e, d, 2)],  # Night (Day D)
+                        shift_vars[(e, d + 1, 1)],  # Noon (Day D+1)
+                        is_morn_reinf_after_tom  # Morn/Reinf (Day D+2)
+                    ]).OnlyEnforceIf(is_chain_c)
+                    # Logic inversion
+                    model.AddBoolOr([shift_vars[(e, d, 2)].Not(), shift_vars[(e, d + 1, 1)].Not(),
+                                     is_morn_reinf_after_tom.Not()]).OnlyEnforceIf(is_chain_c.Not())
+
+                    objective_terms.append(is_chain_c * w['CHAIN_3_PENALTY'])
 
         # Previous week gap penalties
         if e in worked_last_sat_noon:
