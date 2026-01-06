@@ -60,35 +60,35 @@ def main():
         # --------------------------------------------------------
         # DEBUG: RAW SOLVER VALIDATION
         # --------------------------------------------------------
-        print("\n" + "=" * 50)
-        print("🔍 Real-time Check: Raw Data from Solver")
-        print("=" * 50)
-
-        for e_idx, emp in enumerate(config.EMPLOYEES):
-            assigned_count = 0
-            shifts_details = []
-
-            for d in range(config.NUM_DAYS):
-                for s in range(config.NUM_SHIFTS):
-                    if solver.Value(shift_vars[(e_idx, d, s)]):
-                        assigned_count += 1
-                        # Convert indices to readable names
-                        shift_name = ["Morning", "Noon", "Night", "Reinforcement"][s]
-                        day_name = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"][d]
-                        shifts_details.append(f"{day_name}-{shift_name}")
-
-            target = emp['target_shifts']
-
-            # Print status icon based on target vs actual
-            gap = target - assigned_count
-            status_icon = "✅" if gap <= 0 else "❌"
-            if gap > 0: status_icon = "⚠️"  # Shift shortage
-
-            # Print the row
-            print(
-                f"{status_icon} {emp['name']:<15} | Target: {target} | Actual: {assigned_count} | Details: {', '.join(shifts_details)}")
-
-        print("=" * 50 + "\n")
+        # print("\n" + "=" * 50)
+        # print("🔍 Real-time Check: Raw Data from Solver")
+        # print("=" * 50)
+        #
+        # for e_idx, emp in enumerate(config.EMPLOYEES):
+        #     assigned_count = 0
+        #     shifts_details = []
+        #
+        #     for d in range(config.NUM_DAYS):
+        #         for s in range(config.NUM_SHIFTS):
+        #             if solver.Value(shift_vars[(e_idx, d, s)]):
+        #                 assigned_count += 1
+        #                 # Convert indices to readable names
+        #                 shift_name = ["Morning", "Noon", "Night", "Reinforcement"][s]
+        #                 day_name = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"][d]
+        #                 shifts_details.append(f"{day_name}-{shift_name}")
+        #
+        #     target = emp['target_shifts']
+        #
+        #     # Print status icon based on target vs actual
+        #     gap = target - assigned_count
+        #     status_icon = "✅" if gap <= 0 else "❌"
+        #     if gap > 0: status_icon = "⚠️"  # Shift shortage
+        #
+        #     # Print the row
+        #     print(
+        #         f"{status_icon} {emp['name']:<15} | Target: {target} | Actual: {assigned_count} | Details: {', '.join(shifts_details)}")
+        #
+        # print("=" * 50 + "\n")
 
         # --------------------------------------------------------
         # Generate Excel Report

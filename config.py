@@ -22,7 +22,8 @@ WEIGHTS = {
     'TARGET_SHIFTS': 50,
     'MAX_SHIFTS': 60,
     'REST_GAP': 2,
-    'MAX_NIGHTS': 5,
+    'CHAIN_3_PENALTY': 450,
+    'MAX_NIGHTS': 10,
     'MAX_MORNINGS': 4,
     'MAX_EVENINGS': 2,
     'CONSECUTIVE_NIGHTS': 20,
@@ -49,55 +50,49 @@ WEEKEND_DEMAND = {
 # ==========================================
 #         Data: Employees
 # ==========================================
-# config.py
-
-# ... (Previous config lines like NUM_DAYS, SHIFTS, etc.)
-
-# ==========================================
-#         Data: Employees
-# ==========================================
 EMPLOYEES = [
     # Supervisors
-    {'name': 'אביב קוברין', 'target_shifts': 4, 'max_shifts': 4, 'role': 'supervisor', 'history_streak': 0, 'max_mornings': 0, 'min_mornings': 0, 'max_evenings': 0, 'min_evenings': 0, 'max_nights': 0, 'min_nights': 0},
-    {'name': 'אברהם טגניה', 'target_shifts': 5, 'max_shifts': 6, 'role': 'supervisor', 'history_streak': 0, 'max_mornings': 0, 'min_mornings': 0, 'max_evenings': 0, 'min_evenings': 0, 'max_nights': 0, 'min_nights': 0},
-    {'name': 'איתי בכר', 'target_shifts': 5, 'max_shifts': 6, 'role': 'supervisor', 'history_streak': 0, 'max_mornings': 0, 'min_mornings': 0, 'max_evenings': 0, 'min_evenings': 0, 'max_nights': 0, 'min_nights': 0},
-    {'name': 'דן מיכאל צלרו', 'target_shifts': 5, 'max_shifts': 6, 'role': 'supervisor', 'history_streak': 0, 'max_mornings': 0, 'min_mornings': 0, 'max_evenings': 0, 'min_evenings': 0, 'max_nights': 0, 'min_nights': 0},
-    {'name': 'יהודה ענאקי', 'target_shifts': 3, 'max_shifts': 4, 'role': 'supervisor', 'history_streak': 0, 'max_mornings': 0, 'min_mornings': 0, 'max_evenings': 0, 'min_evenings': 0, 'max_nights': 0, 'min_nights': 0},
-    {'name': 'מיטל סבטן', 'target_shifts': 3, 'max_shifts': 3, 'role': 'supervisor', 'history_streak': 0, 'max_mornings': 0, 'min_mornings': 0, 'max_evenings': 0, 'min_evenings': 0, 'max_nights': 0, 'min_nights': 0},
-    {'name': 'מיכאל מורוזוב', 'target_shifts': 3, 'max_shifts': 4, 'role': 'supervisor', 'history_streak': 0, 'max_mornings': 0, 'min_mornings': 0, 'max_evenings': 0, 'min_evenings': 0, 'max_nights': 0, 'min_nights': 0},
-    {'name': 'מקסים ירחו', 'target_shifts': 5, 'max_shifts': 6, 'role': 'supervisor', 'history_streak': 0, 'max_mornings': 0, 'min_mornings': 0, 'max_evenings': 0, 'min_evenings': 0, 'max_nights': 0, 'min_nights': 0},
-    {'name': 'רון פורמן', 'target_shifts': 5, 'max_shifts': 6, 'role': 'supervisor', 'history_streak': 0, 'max_mornings': 0, 'min_mornings': 0, 'max_evenings': 0, 'min_evenings': 0, 'max_nights': 0, 'min_nights': 0},
-    {'name': 'שלמה יסיאס', 'target_shifts': 3, 'max_shifts': 3, 'role': 'supervisor', 'history_streak': 0, 'max_mornings': 0, 'min_mornings': 0, 'max_evenings': 0, 'min_evenings': 0, 'max_nights': 0, 'min_nights': 0},
+    # role_priority: Default is 5. Higher value = Stricter adherence to role ratio.
+    {'name': 'אביב קוברין', 'target_shifts': 4, 'max_shifts': 4, 'role': 'supervisor', 'role_priority': 20, 'history_streak': 0, 'max_mornings': 0, 'min_mornings': 0, 'max_evenings': 0, 'min_evenings': 0, 'max_nights': 2, 'min_nights': 0},
+    {'name': 'אברהם טגניה', 'target_shifts': 5, 'max_shifts': 6, 'role': 'supervisor', 'role_priority': 5, 'history_streak': 0, 'max_mornings': 0, 'min_mornings': 0, 'max_evenings': 0, 'min_evenings': 0, 'max_nights': 2, 'min_nights': 0},
+    {'name': 'איתי בכר', 'target_shifts': 5, 'max_shifts': 6, 'role': 'supervisor', 'role_priority': 5, 'history_streak': 0, 'max_mornings': 0, 'min_mornings': 0, 'max_evenings': 0, 'min_evenings': 0, 'max_nights': 2, 'min_nights': 0},
+    {'name': 'דן מיכאל צלרו', 'target_shifts': 5, 'max_shifts': 6, 'role': 'supervisor', 'role_priority': 5, 'history_streak': 0, 'max_mornings': 0, 'min_mornings': 0, 'max_evenings': 0, 'min_evenings': 0, 'max_nights': 2, 'min_nights': 0},
+    {'name': 'יהודה ענאקי', 'target_shifts': 3, 'max_shifts': 4, 'role': 'supervisor', 'role_priority': 5, 'history_streak': 0, 'max_mornings': 0, 'min_mornings': 0, 'max_evenings': 0, 'min_evenings': 0, 'max_nights': 2, 'min_nights': 0},
+    {'name': 'מיטל סבטן', 'target_shifts': 3, 'max_shifts': 3, 'role': 'supervisor', 'role_priority': 5, 'history_streak': 0, 'max_mornings': 0, 'min_mornings': 0, 'max_evenings': 0, 'min_evenings': 0, 'max_nights': 2, 'min_nights': 0},
+    {'name': 'מיכאל מורוזוב', 'target_shifts': 3, 'max_shifts': 4, 'role': 'supervisor', 'role_priority': 5, 'history_streak': 0, 'max_mornings': 0, 'min_mornings': 0, 'max_evenings': 0, 'min_evenings': 0, 'max_nights': 2, 'min_nights': 0},
+    {'name': 'מקסים ירחו', 'target_shifts': 5, 'max_shifts': 6, 'role': 'supervisor', 'role_priority': 5, 'history_streak': 0, 'max_mornings': 0, 'min_mornings': 0, 'max_evenings': 0, 'min_evenings': 0, 'max_nights': 2, 'min_nights': 0},
+    {'name': 'רון פורמן', 'target_shifts': 5, 'max_shifts': 6, 'role': 'supervisor', 'role_priority': 5, 'history_streak': 0, 'max_mornings': 0, 'min_mornings': 0, 'max_evenings': 0, 'min_evenings': 0, 'max_nights': 2, 'min_nights': 0},
+    {'name': 'שלמה יסיאס', 'target_shifts': 3, 'max_shifts': 3, 'role': 'supervisor', 'role_priority': 5, 'history_streak': 0, 'max_mornings': 0, 'min_mornings': 0, 'max_evenings': 0, 'min_evenings': 0, 'max_nights': 2, 'min_nights': 0},
 
     # Controllers
-    {'name': 'דוד ניסנוב', 'target_shifts': 4, 'max_shifts': 4, 'role': 'controller', 'history_streak': 0, 'max_mornings': 0, 'min_mornings': 0, 'max_evenings': 0, 'min_evenings': 0, 'max_nights': 0, 'min_nights': 0},
-    {'name': 'עדי אוליאל', 'target_shifts': 3, 'max_shifts': 3, 'role': 'controller', 'history_streak': 0, 'max_mornings': 0, 'min_mornings': 0, 'max_evenings': 0, 'min_evenings': 0, 'max_nights': 0, 'min_nights': 0},
-    {'name': 'שגיב בן משה', 'target_shifts': 3, 'max_shifts': 4, 'role': 'controller', 'history_streak': 0, 'max_mornings': 0, 'min_mornings': 0, 'max_evenings': 0, 'min_evenings': 0, 'max_nights': 0, 'min_nights': 0},
+    {'name': 'דוד ניסנוב', 'target_shifts': 4, 'max_shifts': 4, 'role': 'controller', 'history_streak': 0, 'max_mornings': 0, 'min_mornings': 0, 'max_evenings': 0, 'min_evenings': 0, 'max_nights': 2, 'min_nights': 0},
+    {'name': 'עדי אוליאל', 'target_shifts': 3, 'max_shifts': 3, 'role': 'controller', 'history_streak': 0, 'max_mornings': 0, 'min_mornings': 0, 'max_evenings': 0, 'min_evenings': 0, 'max_nights': 2, 'min_nights': 0},
+    {'name': 'שגיב בן משה', 'target_shifts': 3, 'max_shifts': 4, 'role': 'controller', 'history_streak': 0, 'max_mornings': 0, 'min_mornings': 0, 'max_evenings': 0, 'min_evenings': 0, 'max_nights': 2, 'min_nights': 0},
 
     # Guards (Existing & New)
-    {'name': 'אדגו פנטייה', 'target_shifts': 5, 'max_shifts': 6, 'role': 'guard', 'history_streak': 0, 'max_mornings': 0, 'min_mornings': 0, 'max_evenings': 0, 'min_evenings': 0, 'max_nights': 0, 'min_nights': 0},
-    {'name': 'אופיר מנחם', 'target_shifts': 3, 'max_shifts': 3, 'role': 'guard', 'history_streak': 0, 'max_mornings': 0, 'min_mornings': 0, 'max_evenings': 0, 'min_evenings': 0, 'max_nights': 0, 'min_nights': 0},
-    {'name': 'אוריאל כהן', 'target_shifts': 3, 'max_shifts': 4, 'role': 'guard', 'history_streak': 0, 'max_mornings': 0, 'min_mornings': 0, 'max_evenings': 0, 'min_evenings': 0, 'max_nights': 0, 'min_nights': 0},
-    {'name': 'אלון אבשלומו', 'target_shifts': 3, 'max_shifts': 4, 'role': 'guard', 'history_streak': 0, 'max_mornings': 0, 'min_mornings': 0, 'max_evenings': 0, 'min_evenings': 0, 'max_nights': 0, 'min_nights': 0},
-    {'name': 'אליאב דגו', 'target_shifts': 5, 'max_shifts': 6, 'role': 'guard', 'history_streak': 0, 'max_mornings': 0, 'min_mornings': 0, 'max_evenings': 0, 'min_evenings': 0, 'max_nights': 0, 'min_nights': 0},
-    {'name': 'ארתור ארנוביץ', 'target_shifts': 4, 'max_shifts': 4, 'role': 'guard', 'history_streak': 0, 'max_mornings': 0, 'min_mornings': 0, 'max_evenings': 0, 'min_evenings': 0, 'max_nights': 0, 'min_nights': 0},
-    {'name': 'בן שפטר', 'target_shifts': 5, 'max_shifts': 6, 'role': 'guard', 'history_streak': 0, 'max_mornings': 0, 'min_mornings': 0, 'max_evenings': 0, 'min_evenings': 0, 'max_nights': 0, 'min_nights': 0},
-    {'name': 'בן שרעבי', 'target_shifts': 5, 'max_shifts': 6, 'role': 'guard', 'history_streak': 0, 'max_mornings': 0, 'min_mornings': 0, 'max_evenings': 0, 'min_evenings': 0, 'max_nights': 0, 'min_nights': 0},
-    {'name': 'בר גובשייבץ', 'target_shifts': 5, 'max_shifts': 6, 'role': 'guard', 'history_streak': 0, 'max_mornings': 0, 'min_mornings': 0, 'max_evenings': 0, 'min_evenings': 0, 'max_nights': 0, 'min_nights': 0},
-    {'name': 'בר פרויליך', 'target_shifts': 3, 'max_shifts': 3, 'role': 'guard', 'history_streak': 0, 'max_mornings': 0, 'min_mornings': 0, 'max_evenings': 0, 'min_evenings': 0, 'max_nights': 0, 'min_nights': 0},
-    {'name': 'יובל קורן', 'target_shifts': 3, 'max_shifts': 3, 'role': 'guard', 'history_streak': 0, 'max_mornings': 0, 'min_mornings': 0, 'max_evenings': 0, 'min_evenings': 0, 'max_nights': 0, 'min_nights': 0},
-    {'name': 'יניר דוחו', 'target_shifts': 3, 'max_shifts': 4, 'role': 'guard', 'history_streak': 0, 'max_mornings': 0, 'min_mornings': 0, 'max_evenings': 0, 'min_evenings': 0, 'max_nights': 0, 'min_nights': 0},
-    {'name': 'יעל אזיזוב', 'target_shifts': 5, 'max_shifts': 6, 'role': 'guard', 'history_streak': 0, 'max_mornings': 0, 'min_mornings': 0, 'max_evenings': 0, 'min_evenings': 0, 'max_nights': 0, 'min_nights': 0},
-    {'name': 'לי פז', 'target_shifts': 3, 'max_shifts': 4, 'role': 'guard', 'history_streak': 0, 'max_mornings': 0, 'min_mornings': 0, 'max_evenings': 0, 'min_evenings': 0, 'max_nights': 0, 'min_nights': 0},
-    {'name': 'ליאור לוי', 'target_shifts': 3, 'max_shifts': 4, 'role': 'guard', 'history_streak': 0, 'max_mornings': 0, 'min_mornings': 0, 'max_evenings': 0, 'min_evenings': 0, 'max_nights': 0, 'min_nights': 0},
-    {'name': 'מקסים שמרטייב', 'target_shifts': 5, 'max_shifts': 6, 'role': 'guard', 'history_streak': 0, 'max_mornings': 0, 'min_mornings': 0, 'max_evenings': 0, 'min_evenings': 0, 'max_nights': 0, 'min_nights': 0},
-    {'name': 'נהוראי קדוש', 'target_shifts': 5, 'max_shifts': 6, 'role': 'guard', 'history_streak': 0, 'max_mornings': 0, 'min_mornings': 0, 'max_evenings': 0, 'min_evenings': 0, 'max_nights': 0, 'min_nights': 0},
-    {'name': 'ניר תורגמן', 'target_shifts': 4, 'max_shifts': 4, 'role': 'guard', 'history_streak': 0, 'max_mornings': 0, 'min_mornings': 0, 'max_evenings': 0, 'min_evenings': 0, 'max_nights': 0, 'min_nights': 0},
-    {'name': 'סיוון בר סיני', 'target_shifts': 5, 'max_shifts': 6, 'role': 'guard', 'history_streak': 0, 'max_mornings': 0, 'min_mornings': 0, 'max_evenings': 0, 'min_evenings': 0, 'max_nights': 0, 'min_nights': 0},
-    {'name': 'עומר בוזגלו', 'target_shifts': 3, 'max_shifts': 4, 'role': 'guard', 'history_streak': 0, 'max_mornings': 0, 'min_mornings': 0, 'max_evenings': 0, 'min_evenings': 0, 'max_nights': 0, 'min_nights': 0},
-    {'name': 'עמית מנור', 'target_shifts': 5, 'max_shifts': 6, 'role': 'guard', 'history_streak': 0, 'max_mornings': 0, 'min_mornings': 0, 'max_evenings': 0, 'min_evenings': 0, 'max_nights': 0, 'min_nights': 0},
-    {'name': 'שגיב חליווה', 'target_shifts': 5, 'max_shifts': 6, 'role': 'guard', 'history_streak': 0, 'max_mornings': 0, 'min_mornings': 0, 'max_evenings': 0, 'min_evenings': 0, 'max_nights': 0, 'min_nights': 0},
-    {'name': 'שקד איתן', 'target_shifts': 5, 'max_shifts': 6, 'role': 'guard', 'history_streak': 0, 'max_mornings': 0, 'min_mornings': 0, 'max_evenings': 0, 'min_evenings': 0, 'max_nights': 0, 'min_nights': 0},
+    {'name': 'אדגו פנטייה', 'target_shifts': 5, 'max_shifts': 6, 'role': 'guard', 'history_streak': 0, 'max_mornings': 0, 'min_mornings': 0, 'max_evenings': 0, 'min_evenings': 0, 'max_nights': 2, 'min_nights': 0},
+    {'name': 'אופיר מנחם', 'target_shifts': 3, 'max_shifts': 3, 'role': 'guard', 'history_streak': 0, 'max_mornings': 0, 'min_mornings': 0, 'max_evenings': 0, 'min_evenings': 0, 'max_nights': 2, 'min_nights': 0},
+    {'name': 'אוריאל כהן', 'target_shifts': 3, 'max_shifts': 4, 'role': 'guard', 'history_streak': 0, 'max_mornings': 0, 'min_mornings': 0, 'max_evenings': 0, 'min_evenings': 0, 'max_nights': 2, 'min_nights': 0},
+    {'name': 'אלון אבשלומו', 'target_shifts': 3, 'max_shifts': 4, 'role': 'guard', 'history_streak': 0, 'max_mornings': 0, 'min_mornings': 0, 'max_evenings': 0, 'min_evenings': 0, 'max_nights': 2, 'min_nights': 0},
+    {'name': 'אליאב דגו', 'target_shifts': 5, 'max_shifts': 6, 'role': 'guard', 'history_streak': 0, 'max_mornings': 0, 'min_mornings': 0, 'max_evenings': 0, 'min_evenings': 0, 'max_nights': 2, 'min_nights': 0},
+    {'name': 'ארתור ארנוביץ', 'target_shifts': 4, 'max_shifts': 4, 'role': 'guard', 'history_streak': 0, 'max_mornings': 0, 'min_mornings': 0, 'max_evenings': 0, 'min_evenings': 0, 'max_nights': 2, 'min_nights': 0},
+    {'name': 'בן שפטר', 'target_shifts': 5, 'max_shifts': 6, 'role': 'guard', 'history_streak': 0, 'max_mornings': 0, 'min_mornings': 0, 'max_evenings': 0, 'min_evenings': 0, 'max_nights': 2, 'min_nights': 0},
+    {'name': 'בן שרעבי', 'target_shifts': 5, 'max_shifts': 6, 'role': 'guard', 'history_streak': 0, 'max_mornings': 0, 'min_mornings': 0, 'max_evenings': 0, 'min_evenings': 0, 'max_nights': 2, 'min_nights': 0},
+    {'name': 'בר גובשייבץ', 'target_shifts': 5, 'max_shifts': 6, 'role': 'guard', 'history_streak': 0, 'max_mornings': 0, 'min_mornings': 0, 'max_evenings': 0, 'min_evenings': 0, 'max_nights': 2, 'min_nights': 0},
+    {'name': 'בר פרויליך', 'target_shifts': 3, 'max_shifts': 3, 'role': 'guard', 'history_streak': 0, 'max_mornings': 0, 'min_mornings': 0, 'max_evenings': 0, 'min_evenings': 0, 'max_nights': 2, 'min_nights': 0},
+    {'name': 'יובל קורן', 'target_shifts': 3, 'max_shifts': 3, 'role': 'guard', 'history_streak': 0, 'max_mornings': 0, 'min_mornings': 0, 'max_evenings': 0, 'min_evenings': 0, 'max_nights': 2, 'min_nights': 0},
+    {'name': 'יניר דוחו', 'target_shifts': 3, 'max_shifts': 4, 'role': 'guard', 'history_streak': 0, 'max_mornings': 0, 'min_mornings': 0, 'max_evenings': 0, 'min_evenings': 0, 'max_nights': 2, 'min_nights': 0},
+    {'name': 'יעל אזיזוב', 'target_shifts': 5, 'max_shifts': 6, 'role': 'guard', 'history_streak': 0, 'max_mornings': 0, 'min_mornings': 0, 'max_evenings': 0, 'min_evenings': 0, 'max_nights': 2, 'min_nights': 0},
+    {'name': 'לי פז', 'target_shifts': 3, 'max_shifts': 4, 'role': 'guard', 'history_streak': 0, 'max_mornings': 0, 'min_mornings': 0, 'max_evenings': 0, 'min_evenings': 0, 'max_nights': 2, 'min_nights': 0},
+    {'name': 'ליאור לוי', 'target_shifts': 3, 'max_shifts': 4, 'role': 'guard', 'history_streak': 0, 'max_mornings': 0, 'min_mornings': 0, 'max_evenings': 0, 'min_evenings': 0, 'max_nights': 2, 'min_nights': 0},
+    {'name': 'מקסים שמרטייב', 'target_shifts': 5, 'max_shifts': 6, 'role': 'guard', 'history_streak': 0, 'max_mornings': 0, 'min_mornings': 0, 'max_evenings': 0, 'min_evenings': 0, 'max_nights': 2, 'min_nights': 0},
+    {'name': 'נהוראי קדוש', 'target_shifts': 5, 'max_shifts': 6, 'role': 'guard', 'history_streak': 0, 'max_mornings': 0, 'min_mornings': 0, 'max_evenings': 0, 'min_evenings': 0, 'max_nights': 2, 'min_nights': 0},
+    {'name': 'ניר תורגמן', 'target_shifts': 4, 'max_shifts': 4, 'role': 'guard', 'history_streak': 0, 'max_mornings': 0, 'min_mornings': 0, 'max_evenings': 0, 'min_evenings': 0, 'max_nights': 2, 'min_nights': 0},
+    {'name': 'סיוון בר סיני', 'target_shifts': 5, 'max_shifts': 6, 'role': 'guard', 'history_streak': 0, 'max_mornings': 0, 'min_mornings': 0, 'max_evenings': 0, 'min_evenings': 0, 'max_nights': 2, 'min_nights': 0},
+    {'name': 'עומר בוזגלו', 'target_shifts': 3, 'max_shifts': 4, 'role': 'guard', 'history_streak': 0, 'max_mornings': 0, 'min_mornings': 0, 'max_evenings': 0, 'min_evenings': 0, 'max_nights': 2, 'min_nights': 0},
+    {'name': 'עמית מנור', 'target_shifts': 5, 'max_shifts': 6, 'role': 'guard', 'history_streak': 0, 'max_mornings': 0, 'min_mornings': 0, 'max_evenings': 0, 'min_evenings': 0, 'max_nights': 2, 'min_nights': 0},
+    {'name': 'שגיב חליווה', 'target_shifts': 5, 'max_shifts': 6, 'role': 'guard', 'history_streak': 0, 'max_mornings': 0, 'min_mornings': 0, 'max_evenings': 0, 'min_evenings': 0, 'max_nights': 2, 'min_nights': 0},
+    {'name': 'שקד איתן', 'target_shifts': 5, 'max_shifts': 6, 'role': 'guard', 'history_streak': 0, 'max_mornings': 0, 'min_mornings': 0, 'max_evenings': 0, 'min_evenings': 0, 'max_nights': 2, 'min_nights': 0},
 ]
 
 EMPLOYEE_COLORS = [
@@ -123,18 +118,8 @@ MANUAL_ASSIGNMENTS = [
 # Manual Unavailability Requests
 # Format: (Employee ID, Day 0-6, Shift 0-2)
 MANUAL_REQUESTS = [
-    (0, 1, 0),
-    (0, 1, 1),
-    (0, 1, 3),
-    (0, 2, 2),
-    (0, 2, 3),
-    (0, 6, 0),
-    (0, 6, 1),
-    (1, 0, 2),
-    (1, 1, 0),
-    (1, 1, 3),
-    (1, 3, 1),
-    (1, 5, 0),
+    (0, 1, 0), (0, 1, 1),(0, 1, 3),(0, 2, 2),(0, 2, 3),(0, 6, 0),(0, 6, 1),
+    (1, 0, 2),(1, 1, 0),(1, 1, 3),(1, 3, 1),(1, 5, 0),
     (1, 5, 1),
     (1, 6, 0),
     (2, 0, 0),

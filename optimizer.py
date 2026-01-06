@@ -164,24 +164,34 @@ def _build_objective_function(model, shift_vars, employees, num_days, num_shifts
     w = config.WEIGHTS
     objective_terms = []
 
-    # --- Helper: Identify Supervisor Slots (Slots that explicitly require a supervisor) ---
-    supervisor_slots = []
+    # --- Helper: Identify ALL Special Role Slots (Supervisor + Controller) ---
+    # We create a unified pool of 36 shifts (15 Sup + 21 Ctrl)
+    special_slots = []
     weekend_days = [5, 6]
+
     for d in range(num_days):
         daily_config = config.WEEKEND_DEMAND if d in weekend_days else config.WEEKDAY_DEMAND
         for s in range(num_shifts):
-            if daily_config.get(s, {}).get('supervisor', 0) > 0:
-                supervisor_slots.append((d, s))
+            reqs = daily_config.get(s, {})
+            # If shift requires supervisor OR controller, add to pool
+            # Note: Slots are distinct.
+            if reqs.get('supervisor', 0) > 0:
+                special_slots.append((d, s))
+            if reqs.get('controller', 0) > 0:
+                special_slots.append((d, s))
 
-    total_supervisor_demand = len(supervisor_slots)  # Should be 15 per your description
+    # Calculate Totals for the Unified Pool
+    total_special_demand = len(special_slots)  # Should be 36
 
-    # Calculate Total Capacity of Supervisors (Sum of their targets)
-    supervisors_indices = [i for i, emp in enumerate(employees) if emp.get('role') == 'supervisor']
-    total_supervisor_capacity = sum(employees[i]['target_shifts'] for i in supervisors_indices)
+    # Calculate Total Capacity of ALL eligible employees (Supervisors + Controllers)
+    # We sum the 'target_shifts' of everyone who belongs to this "Upper Tier"
+    special_employees_indices = [
+        i for i, emp in enumerate(employees)
+        if emp.get('role') in ['supervisor', 'controller']
+    ]
 
-    # Avoid division by zero
-    if total_supervisor_capacity == 0:
-        total_supervisor_capacity = 1
+    total_special_capacity = sum(employees[i]['target_shifts'] for i in special_employees_indices)
+    if total_special_capacity == 0: total_special_capacity = 1  # Avoid division by zero
 
     for e in range(len(employees)):
         # Gather shift lists for easy summing
@@ -242,8 +252,9 @@ def _build_objective_function(model, shift_vars, employees, num_days, num_shifts
             objective_terms.append(is_3_nights * w['CONSECUTIVE_NIGHTS'])
 
         # --- C. Rest Gaps (Quick Turnarounds) ---
-        # Avoid pattern: Work Shift X -> Skip 1 -> Work Shift Y (Too tight)
         total_slots = num_days * num_shifts
+
+        # 1. Standard Gap Check: Work Shift X -> Skip 1 -> Work Shift Y
         for t in range(total_slots - 2):
             day, shift = t // num_shifts, t % num_shifts
             t2 = t + 2
@@ -254,6 +265,24 @@ def _build_objective_function(model, shift_vars, employees, num_days, num_shifts
             model.AddBoolOr([shift_vars[(e, day, shift)].Not(), shift_vars[(e, day2, shift2)].Not()]).OnlyEnforceIf(
                 bad_gap.Not())
             objective_terms.append(bad_gap * w['REST_GAP'])
+
+        # 2. HEAVY PENALTY Gap Check: Work(t) -> Gap -> Work(t+2) -> Gap -> Work(t+4)
+        # This penalizes the specific exhausting 3-shift chain heavily
+        if 'CHAIN_3_PENALTY' in w:
+            for t in range(total_slots - 4):
+                d1, s1 = t // num_shifts, t % num_shifts
+                d2, s2 = (t + 2) // num_shifts, (t + 2) % num_shifts
+                d3, s3 = (t + 4) // num_shifts, (t + 4) % num_shifts
+
+                is_chain_3 = model.NewBoolVar(f'chain3_{e}_{t}')
+                model.AddBoolAnd([
+                    shift_vars[(e, d1, s1)],
+                    shift_vars[(e, d2, s2)],
+                    shift_vars[(e, d3, s3)]
+                ]).OnlyEnforceIf(is_chain_3)
+
+                # Apply the heavy ("quadratic") penalty
+                objective_terms.append(is_chain_3 * w['CHAIN_3_PENALTY'])
 
         # Previous week gap penalties
         if e in worked_last_sat_noon:
@@ -283,29 +312,27 @@ def _build_objective_function(model, shift_vars, employees, num_days, num_shifts
         # 3. Hard Limit (Absolute Max)
         model.Add(total_worked <= employees[e]['max_shifts'])
 
-        # --- E. Proportional Supervisor Role Distribution (NEW FEATURE) ---
-        # Ensures that the specific 15 "Supervisor" shifts are distributed based on job ratio.
-        if employees[e].get('role') == 'supervisor':
-            # 1. Calculate how many ACTUAL supervisor shifts this employee is assigned
-            assigned_sup_shifts = sum(shift_vars[(e, d, s)] for d, s in supervisor_slots)
+        # --- E. Unified Special Role Fairness (Supervisor + Controller) ---
+        # Balancing the 36 "Prestige" shifts across all eligible staff
+        if employees[e].get('role') in ['supervisor', 'controller']:
+            # Count how many special shifts this employee actually got
+            assigned_special = sum(shift_vars[(e, d, s)] for d, s in special_slots)
 
-            # 2. Calculate Expected Share using Cross-Multiplication (to avoid floats)
-            # Formula: (Actual / Demand) approx (Target / Capacity)
-            # Integer Logic: Actual * Capacity approx Target * Demand
+            # Cross-multiplication for Integer Arithmetic:
+            # (ActualSpecial * TotalSpecialCapacity) should equal (Target * TotalSpecialDemand)
+            val_actual = assigned_special * total_special_capacity
+            val_expected = target * total_special_demand
 
-            val_actual = assigned_sup_shifts * total_supervisor_capacity
-            val_expected = target * total_supervisor_demand
+            # Calculate difference
+            diff = model.NewIntVar(-2000, 2000, f'spec_diff_{e}')
+            model.Add(diff == val_actual - val_expected)
 
-            # 3. Add Penalty for deviation
-            sup_delta = model.NewIntVar(-1000, 1000, f'sup_delta_{e}')
-            model.Add(sup_delta == val_actual - val_expected)
+            abs_diff = model.NewIntVar(0, 2000, f'abs_spec_diff_{e}')
+            model.AddAbsEquality(abs_diff, diff)
 
-            abs_sup_delta = model.NewIntVar(0, 1000, f'abs_sup_delta_{e}')
-            model.AddAbsEquality(abs_sup_delta, sup_delta)
-
-            # Use a high weight to prioritize this fairness
-            # We scale it down slightly because we multiplied by capacity (e.g. 30) earlier
-            objective_terms.append(abs_sup_delta * 5)
+            # Apply dynamic weight from employee config (default 5)
+            role_weight = employees[e].get('role_priority', 5)
+            objective_terms.append(abs_diff * role_weight)
 
     model.Minimize(sum(objective_terms))
 

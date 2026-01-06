@@ -20,6 +20,8 @@ def _setup_styles():
         'stats_header_fill': PatternFill(start_color="70AD47", end_color="70AD47", fill_type="solid"),
         'orange_header_fill': PatternFill(start_color="ED7D31", end_color="ED7D31", fill_type="solid"),
         'blue_header_fill': PatternFill(start_color="5B9BD5", end_color="5B9BD5", fill_type="solid"),
+        'purple_header_fill': PatternFill(start_color="7030A0", end_color="7030A0", fill_type="solid"),
+        # New color for unified table
         'grey_fill': PatternFill(start_color="DDDDDD", end_color="DDDDDD", fill_type="solid"),
 
         # Alerts / Conditional Formatting
@@ -216,11 +218,11 @@ def _create_stats_sheet(wb, styles, employees, shift_counts, role_fill_counts):
 
     # --- Table 1: General Shift Counts ---
     row = 2
-    ws.cell(row=row, column=1).value = "סיכום משמרות לעובד"
+    ws.cell(row=row, column=1).value = "סיכום משמרות לעובד (כללי)"
     ws.cell(row=row, column=1).font = Font(bold=True, size=14)
     row += 1
 
-    headers = ["שם העובד", "בוקר", "צהריים", "לילה", "תגבור", 'סה"כ', 'יעד']
+    headers = ["שם העובד", "בוקר", "צהריים", "לילה", "תגבור", 'סה"כ כללי', 'יעד']
     for idx, h in enumerate(headers, 1):
         c = ws.cell(row=row, column=idx)
         c.value = h
@@ -274,56 +276,71 @@ def _create_stats_sheet(wb, styles, employees, shift_counts, role_fill_counts):
         c.alignment = styles['center']
     row += 3
 
-    # --- Table 2: Supervisor Stats ---
-    # Show ONLY employees with role='supervisor'
-    _create_role_table(ws, row, "סיכום משמרות אחמ\"ש", "שם האחמ\"ש", 'סה"כ משמרות בתפקיד אחמ"ש',
-                       employees, role_fill_counts, 'supervisor', ['supervisor'],
-                       styles['orange_header_fill'], styles)
-
-    # Calculate offset
-    supervisor_count = len([e for e in employees if e.get('role') == 'supervisor'])
-    row += (supervisor_count + 4)
-
-    # --- Table 3: Controller Stats ---
-    # Show ONLY employees with role='controller' (Excluding supervisors who did controller shifts)
-    _create_role_table(ws, row, "סיכום משמרות בקרה", "שם הבקר", 'סה"כ משמרות בתפקיד בקר',
-                       employees, role_fill_counts, 'controller', ['controller'],
-                       styles['blue_header_fill'], styles)
+    # --- Table 2: Unified Special Shifts (Supervisor & Controller) ---
+    _create_unified_stats_table(ws, row, styles, employees, role_fill_counts)
 
 
-def _create_role_table(ws, start_row, title, col1_name, col2_name, employees, role_fill_counts, role_key, filter_roles,
-                       header_fill, styles):
+def _create_unified_stats_table(ws, start_row, styles, employees, role_fill_counts):
     """
-    Helper to create stats table for specific roles.
-    filter_roles: List of employee roles to include in this table (e.g. ['controller']).
+    Creates a unified table for all 'Senior' staff (Supervisors and Controllers).
+    Shows the breakdown of their specialized shifts vs their target.
     """
-    ws.cell(row=start_row, column=1).value = title
+    # Title
+    ws.cell(row=start_row, column=1).value = "סיכום משמרות בכירים (אחמ\"ש + בקרה)"
     ws.cell(row=start_row, column=1).font = Font(bold=True, size=14)
     start_row += 1
 
-    ws.cell(row=start_row, column=1).value = col1_name
-    ws.cell(row=start_row, column=2).value = col2_name
-    for i in [1, 2]:
-        c = ws.cell(row=start_row, column=i)
+    # Headers
+    headers = ["שם העובד", "תפקיד", "משמרות אחמ\"ש", "משמרות בקרה", "סה\"כ בכירים", "יעד"]
+    for idx, h in enumerate(headers, 1):
+        c = ws.cell(row=start_row, column=idx)
+        c.value = h
         c.font = styles['header_font']
-        c.fill = header_fill
+        c.fill = styles['purple_header_fill']
         c.border = styles['border']
+        c.alignment = styles['center']
     start_row += 1
 
+    # Data Rows
     for e_idx, emp in enumerate(employees):
-        # Only list employees whose MAIN role matches the filter list
-        if emp.get('role') in filter_roles:
-            count = role_fill_counts[e_idx][role_key]
+        # Filter: Only Supervisors and Controllers
+        role = emp.get('role', 'guard')
+        if role not in ['supervisor', 'controller']:
+            continue
 
-            c1 = ws.cell(row=start_row, column=1)
-            c1.value = emp['name']
-            c1.border = styles['border']
+        # Determine Display Role
+        role_display = "אחמ\"ש" if role == 'supervisor' else "בקר"
 
-            c2 = ws.cell(row=start_row, column=2)
-            c2.value = count
-            c2.border = styles['border']
-            c2.alignment = styles['center']
-            start_row += 1
+        # Get Counts
+        sup_count = role_fill_counts[e_idx]['supervisor']
+        ctrl_count = role_fill_counts[e_idx]['controller']
+        total_special = sup_count + ctrl_count
+        target = emp.get('target_shifts', 0)
+
+        row_data = [emp['name'], role_display, sup_count, ctrl_count, total_special, target]
+
+        # Conditional Formatting Logic (Visual aid)
+        fill = None
+        # Example: if total special shifts match target exactly -> Green, else Red?
+        # Since we optimize for fairness, let's mark deviations.
+        # Note: This is a rough heuristic for coloring.
+        if total_special == target:
+            fill = styles['alert_green']
+        elif abs(total_special - target) >= 2:
+            fill = styles['alert_red']
+
+        for idx, val in enumerate(row_data, 1):
+            c = ws.cell(row=start_row, column=idx)
+            c.value = val
+            c.border = styles['border']
+            c.alignment = styles['center']
+
+            # Apply fill to the 'Total Special' column specifically or entire row?
+            # Let's apply to Total and Target columns for clarity
+            if idx in [5, 6] and fill:
+                c.fill = fill
+
+        start_row += 1
 
 
 # ============================================================================
