@@ -98,16 +98,32 @@ def _add_availability_constraints(model, shift_vars, employees, unavailable_requ
                                   manual_assignments, worked_last_sat_noon, worked_last_sat_night):
     """
     Handles specific user requests, forced assignments, and history from previous week.
+    Also propagates overlapping constraints (e.g., Blocked Morning -> Blocked Reinforcement).
     """
     num_employees = len(employees)
     num_days = config.NUM_DAYS
     num_shifts = config.NUM_SHIFTS
 
-    # A. Unavailable Requests (Manual + Image)
-    for req in unavailable_requests:
-        e, d, s = req
-        if 0 <= e < num_employees and 0 <= d < num_days and 0 <= s < num_shifts:
-            model.Add(shift_vars[(e, d, s)] == 0)
+    # Convert list to set for O(1) lookups
+    unavailable_set = set(unavailable_requests)
+
+    # A. Unavailable Requests (Direct + Implied)
+    for e in range(num_employees):
+        for d in range(num_days):
+            # 1. Apply Direct Constraints
+            for s in range(num_shifts):
+                if (e, d, s) in unavailable_set:
+                    model.Add(shift_vars[(e, d, s)] == 0)
+
+            # 2. Apply Implied Constraints for Reinforcement (Shift 3)
+            # If employee cannot work Morning (0) OR Noon (1), they cannot work Reinforcement (3)
+            # because Reinforcement overlaps both.
+            is_morning_blocked = (e, d, config.SHIFT_MORNING) in unavailable_set
+            is_noon_blocked = (e, d, config.SHIFT_NOON) in unavailable_set
+
+            if is_morning_blocked or is_noon_blocked:
+                # Force Reinforcement to be 0 as well
+                model.Add(shift_vars[(e, d, config.SHIFT_REINFORCEMENT)] == 0)
 
     # B. Previous Week Context (Rest Rules)
     for emp_id in worked_last_sat_night:
@@ -120,7 +136,7 @@ def _add_availability_constraints(model, shift_vars, employees, unavailable_requ
         e, d, s = assign
         if 0 <= e < num_employees and 0 <= d < num_days and 0 <= s < num_shifts:
             # Safety Check
-            if (e, d, s) in unavailable_requests:
+            if (e, d, s) in unavailable_set:
                 name = employees[e]['name']
                 raise ValueError(f"CRITICAL CONFLICT: {name} forced to (D:{d}, S:{s}) but marked unavailable.")
 

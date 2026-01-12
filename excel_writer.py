@@ -74,6 +74,7 @@ def _calculate_penalty_counts(solver, shift_vars, employees, num_days, num_shift
     # Helper: Check if working Morning (0) OR Reinforcement (3)
     def is_morn_reinf(e, d):
         if d >= num_days: return False
+        # Assuming Shift 0 is Morning and Shift 3 is Reinforcement (Morning overlap)
         return is_working(e, d, 0) or is_working(e, d, 3)
 
     for e in range(len(employees)):
@@ -83,17 +84,27 @@ def _calculate_penalty_counts(solver, shift_vars, employees, num_days, num_shift
             if is_working(e, d, 2) and is_working(e, d + 1, 2) and is_working(e, d + 2, 2):
                 penalties[e]['consecutive_nights'] += 1
 
-        # 2. Count Rest Gaps (Work -> Skip 1 -> Work)
-        # Flatten schedule to linear timeline
-        total_slots = num_days * num_shifts
-        for t in range(total_slots - 2):
-            d1, s1 = t // num_shifts, t % num_shifts
-            d2, s2 = (t + 2) // num_shifts, (t + 2) % num_shifts
+        # 2. Count Rest Gaps (8-8 Patterns)
+        # We explicitly check for the "Bad Combinations" of shifts that result in 8h rest only.
+        # Combinations:
+        # A. Same Day: Morning/Reinf -> Night
+        # B. Next Day: Noon -> Morning/Reinf
+        # C. Next Day: Night -> Noon
 
-            # Note: We must be careful not to double count "Chain 3" as regular gaps if possible,
-            # but usually they are counted separately in optimization.
-            if solver.Value(shift_vars[(e, d1, s1)]) and solver.Value(shift_vars[(e, d2, s2)]):
+        for d in range(num_days):
+            # A. Same Day: Start Early (0/3) -> End Late (2)
+            if is_morn_reinf(e, d) and is_working(e, d, 2):
                 penalties[e]['rest_gap'] += 1
+
+            # Check Transitions to Next Day
+            if d < num_days - 1:
+                # B. Noon (1) -> Next Morning/Reinf (0/3)
+                if is_working(e, d, 1) and is_morn_reinf(e, d + 1):
+                    penalties[e]['rest_gap'] += 1
+
+                # C. Night (2) -> Next Noon (1)
+                if is_working(e, d, 2) and is_working(e, d + 1, 1):
+                    penalties[e]['rest_gap'] += 1
 
         # 3. Count Chain 3 (The 8-8-8 Patterns: A, B, C)
         for d in range(num_days - 1):
