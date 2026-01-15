@@ -41,8 +41,8 @@ WEEKDAY_DEMAND = {
 }
 
 WEEKEND_DEMAND = {
-    SHIFT_MORNING:       {'guard': 3, 'controller': 1, 'supervisor': 0},
-    SHIFT_NOON:          {'guard': 3, 'controller': 1, 'supervisor': 0},
+    SHIFT_MORNING:       {'guard': 4, 'controller': 1, 'supervisor': 0},
+    SHIFT_NOON:          {'guard': 4, 'controller': 1, 'supervisor': 0},
     SHIFT_NIGHT:         {'guard': 4, 'controller': 1, 'supervisor': 0},
     SHIFT_REINFORCEMENT: {'guard': 0, 'controller': 0, 'supervisor': 0}
 }
