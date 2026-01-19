@@ -145,9 +145,9 @@ def _create_schedule_sheet(wb, styles, solver, shift_vars, employees, num_days, 
         c.fill = styles['header_fill']
         c.alignment = styles['center']
 
-    # --- Layout Definition ---
+    # Define the Table Layout
     layout = [
-        # Building 15
+        # --- Building 15 ---
         {"title": "בניין 15", "is_header": True},
         {"time": "בוקר", "role": "קבלה", "shift": 0, "role_needed": "guard"},
         {"time": "", "role": "סייר", "shift": 0, "role_needed": "guard"},
@@ -159,19 +159,32 @@ def _create_schedule_sheet(wb, styles, solver, shift_vars, employees, num_days, 
         {"time": "לילה", "role": "קבלה", "shift": 2, "role_needed": "guard"},
         {"time": "", "role": "סייר", "shift": 2, "role_needed": "guard"},
 
-        # Building 18
+        # --- Building 18 ---
         {"title": "בניין 18", "is_header": True},
+
+        # Morning
         {"time": "בוקר", "role": "קבלה", "shift": 0, "role_needed": "guard"},
         {"time": "", "role": "בקרה", "shift": 0, "role_needed": "controller"},
         {"time": "", "role": "אחמ\"ש", "shift": 0, "role_needed": "supervisor"},
+        # New row added for the 4th guard (Patrol/Sayer)
+        {"time": "", "role": "סייר", "shift": 0, "role_needed": "guard"},
+
+        # Reinforcement / Special (07-18)
         {"time": "", "role": "סייר (7-18)", "shift": 3, "role_needed": "guard"},
         {"time": "", "role": "מאבטח 1 (7-18)", "shift": 3, "role_needed": "guard"},
         {"time": "", "role": "מאבטח 2 (7-18)", "shift": 3, "role_needed": "guard"},
         {"is_spacer": True},
+
+        # Noon
         {"time": "צהריים", "role": "קבלה", "shift": 1, "role_needed": "guard"},
         {"time": "", "role": "בקרה", "shift": 1, "role_needed": "controller"},
         {"time": "", "role": "אחמ\"ש", "shift": 1, "role_needed": "supervisor"},
+        # New row added for the 4th guard (Patrol/Sayer)
+        {"time": "", "role": "סייר", "shift": 1, "role_needed": "guard"},
+
         {"is_spacer": True},
+
+        # Night
         {"time": "לילה", "role": "קבלה", "shift": 2, "role_needed": "guard"},
         {"time": "", "role": "בקרה", "shift": 2, "role_needed": "controller"},
         {"time": "", "role": "סייר", "shift": 2, "role_needed": "guard"},
@@ -297,9 +310,10 @@ def _create_stats_sheet(wb, styles, employees, shift_counts, role_fill_counts):
         row_data = [emp['name'], counts[0], counts[1], counts[2], counts[3], total, target]
 
         fill = None
-        if total > target:
+        diff = target - total
+        if diff < 0:
             fill = styles['alert_green']
-        elif total < target:
+        elif diff > 2:
             fill = styles['alert_red']
         if counts[2] > 2: fill = styles['alert_orange']
 

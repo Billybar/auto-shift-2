@@ -41,8 +41,8 @@ WEEKDAY_DEMAND = {
 }
 
 WEEKEND_DEMAND = {
-    SHIFT_MORNING:       {'guard': 3, 'controller': 1, 'supervisor': 0},
-    SHIFT_NOON:          {'guard': 3, 'controller': 1, 'supervisor': 0},
+    SHIFT_MORNING:       {'guard': 4, 'controller': 1, 'supervisor': 0},
+    SHIFT_NOON:          {'guard': 4, 'controller': 1, 'supervisor': 0},
     SHIFT_NIGHT:         {'guard': 4, 'controller': 1, 'supervisor': 0},
     SHIFT_REINFORCEMENT: {'guard': 0, 'controller': 0, 'supervisor': 0}
 }
@@ -173,8 +173,8 @@ EMPLOYEE_COLORS = [
 # ==========================================
 
 # Previous Week Context
-WORKED_LAST_SAT_NOON = [0, 4]  # Example: Ira and Gadi
-WORKED_LAST_SAT_NIGHT = [1, 5]  # Example: Asaf, Dolev
+WORKED_LAST_SAT_NOON = [0, 4]  # Example:
+WORKED_LAST_SAT_NIGHT = [1, 5]  # Example:
 
 # Manual Assignments (Force Shift)
 MANUAL_ASSIGNMENTS = [

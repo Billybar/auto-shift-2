@@ -60,6 +60,26 @@ def main():
         # --------------------------------------------------------
         # DEBUG: RAW SOLVER VALIDATION
         # --------------------------------------------------------
+        # if status == cp_model.OPTIMAL or status == cp_model.FEASIBLE:
+        #     print(f"\n✅ Solution Found! Cost (Penalty): {solver.ObjectiveValue()}")
+        #
+        #     # --- הוסף את הקוד הזה ---
+        #     print("\n🔍 DEBUG: Night Shift Counts (Check if 4 or 5)")
+        #     print("-" * 40)
+        #     night_shift_idx = 2  # SHIFT_NIGHT
+        #
+        #     for d in range(config.NUM_DAYS):
+        #         # ספירת עובדים ששובצו בפועל למשמרת לילה ביום d
+        #         assigned = [e for e in range(len(config.EMPLOYEES)) if
+        #                     solver.Value(shift_vars[(e, d, night_shift_idx)])]
+        #         count = len(assigned)
+        #
+        #         day_name = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"][d]
+        #         status_icon = "✅" if count == 5 else "❌"
+        #         print(f"{day_name} Night: {count} Employees assigned {status_icon}")
+        #     print("-" * 40)
+        #     # ------------------------
+
         # print("\n" + "=" * 50)
         # print("🔍 Real-time Check: Raw Data from Solver")
         # print("=" * 50)

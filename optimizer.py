@@ -90,6 +90,13 @@ def _add_shift_rules_constraints(model, shift_vars, num_employees, num_days, num
             model.Add(shift_vars[(e, d, config.SHIFT_REINFORCEMENT)] +
                       shift_vars[(e, d, config.SHIFT_NOON)] <= 1)
 
+    # C. Absolute Max One Shift Per Day
+    # This ensures an employee works AT MOST one shift per calendar day.
+    for e in range(num_employees):
+        for d in range(num_days):
+            # הסכום של כל המשמרות (בוקר, צהריים, לילה, תגבור) ביום ספציפי חייב להיות <= 1
+            model.Add(sum(shift_vars[(e, d, s)] for s in range(num_shifts)) <= 1)
+
 
 # ============================================================================
 # 4. Hard Constraints: Availability & Assignments
